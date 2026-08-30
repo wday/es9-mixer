@@ -42,6 +42,16 @@ fn base() -> Config {
     };
 
     // USB capture: inputs 1-14 to the computer, then the two mixer outputs.
+    //
+    // **This deviates from the module's own default, deliberately.** The factory config
+    // puts the S/PDIF input on capture 15/16 (manual p.11). Pointing them at MIX 1/2
+    // instead gives the DAW a stereo capture of exactly what leaves the main outs,
+    // sample-aligned with the 14 multitracks — a reference mix of what was actually
+    // heard, which is worth more on a recording rig than an S/PDIF return.
+    //
+    // The cost is that the S/PDIF *input* no longer reaches the host. Anyone who needs
+    // it puts `Source::Spdif` back here; do not "correct" this to match the factory
+    // default without knowing which trade is wanted.
     let mut usb_sources = Vec::new();
     for n in 1..=14u8 {
         usb_sources.push(Source::Input(n));
@@ -81,10 +91,12 @@ pub fn hosted() -> Config {
     };
     let sources: Vec<Source> = (1..=8).map(Source::Usb).collect();
     c.capture[2] = wire(&sources, Source::to_wire);
-    c.capture[3] = wire(
-        &[Source::Spdif(false), Source::Spdif(true)],
-        Source::to_wire,
-    );
+    // Block 3's capture side is what feeds the S/PDIF *output*, so it takes DAW channels
+    // 5-6: "the S/PDIF block has its inputs set to USB 5-6 i.e. DAW outputs 5-6 get sent
+    // out to the S/PDIF output" (manual p.11). Feeding it from `Source::Spdif` instead
+    // would make the optical output a passthrough of the optical input, which is not
+    // what anyone wants and is not the module's default.
+    c.capture[3] = wire(&[Source::Usb(5), Source::Usb(6)], Source::to_wire);
     c
 }
 

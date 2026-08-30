@@ -128,7 +128,21 @@ function renderHeader() {
   if (s.version) bits.push(`<b>${s.version}</b>`);
   if (s.sampleRate) bits.push(`${(s.sampleRate / 1000).toFixed(1)} kHz`);
   if (s.dspLoad != null) bits.push(`DSP ${s.dspLoad.toFixed(1)}%`);
-  bits.push(s.mixer2 ? 'Mixer 2 on' : 'S/PDIF on');
+  // Options bit 0 chooses what routing block 3 *is*, so name the block rather than
+  // announcing a feature: "S/PDIF on" reads as "S/PDIF works", which the mode bit does
+  // not promise. When the block is S/PDIF, say what it is actually carrying.
+  if (s.mixer2) {
+    bits.push('Block 3: Mixer 2');
+  } else if (s.spdif) {
+    const inbound = s.spdif.inputTo
+      ? `in \u2192 ${s.spdif.inputTo}`
+      : 'in not captured';
+    bits.push(
+      `Block 3: S/PDIF <span class="dim">out \u2190 ${s.spdif.outputFrom} &middot; ${inbound}</span>`,
+    );
+  } else {
+    bits.push('Block 3: S/PDIF');
+  }
   $('status').innerHTML = bits.join('</span><span>').replace(/^/, '<span>') + '</span>';
 
   const slot = $('slot');

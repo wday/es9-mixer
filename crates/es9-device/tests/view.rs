@@ -345,3 +345,56 @@ fn routing_a_mix_to_an_output_makes_its_offset_effective() {
     );
     assert_eq!(offsets[4].fed_by.as_deref(), Some("Mix 1"));
 }
+
+#[test]
+fn spdif_status_reports_both_directions_not_just_the_mode() {
+    // Options bit 0 clear means block 3 *is* the S/PDIF processor. That alone says
+    // nothing about whether either direction reaches anything, which is the whole point
+    // of reporting more than the mode.
+    let state = DeviceState {
+        config: es9_device::presets::hosted(),
+        ..Default::default()
+    };
+    let status = view::status(&state);
+    assert!(!status.mixer2);
+
+    let spdif = status.spdif.expect("block 3 is the S/PDIF processor");
+    assert_eq!(
+        spdif.output_from, "USB 5/6",
+        "the S/PDIF output carries DAW channels 5-6, per the manual's default"
+    );
+    assert_eq!(
+        spdif.input_to, None,
+        "this preset points capture 15/16 at the mix, so the S/PDIF input reaches nothing"
+    );
+}
+
+#[test]
+fn capturing_the_spdif_input_shows_where_it_lands() {
+    let mut state = DeviceState {
+        config: es9_device::presets::hosted(),
+        ..Default::default()
+    };
+    // Put the S/PDIF input back on capture 15/16, the module's own default.
+    state.config.capture[1][6] = Source::Spdif(false).to_wire().expect("S/PDIF L");
+    state.config.capture[1][7] = Source::Spdif(true).to_wire().expect("S/PDIF R");
+
+    let spdif = view::status(&state)
+        .spdif
+        .expect("still the S/PDIF processor");
+    assert_eq!(spdif.input_to.as_deref(), Some("capture 15/16"));
+}
+
+#[test]
+fn enabling_mixer_2_leaves_no_spdif_to_report() {
+    let state = DeviceState {
+        config: es9_device::presets::standalone(),
+        ..Default::default()
+    };
+    let status = view::status(&state);
+    assert!(status.mixer2);
+    assert_eq!(
+        status.spdif, None,
+        "block 3 is a mixer bank, so there is no S/PDIF processor to describe"
+    );
+}

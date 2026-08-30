@@ -28,10 +28,35 @@ pub struct Status {
     pub dirty: bool,
     /// Whether the second mixer is enabled.
     pub mixer2: bool,
+    /// The S/PDIF processor, present only when block 3 is acting as S/PDIF.
+    ///
+    /// `None` when [`Status::mixer2`] is set, because the block is a mixer bank instead.
+    pub spdif: Option<Spdif>,
     /// DSP load percentage, when reported.
     pub dsp_load: Option<f32>,
     /// The module's most recent text message.
     pub last_message: Option<String>,
+}
+
+/// What the S/PDIF processor is actually carrying.
+///
+/// Options bit 0 only says block 3 is *acting* as the S/PDIF processor. It says nothing
+/// about whether either direction reaches anything, and a status line that reports the
+/// mode alone reads as "S/PDIF works" when it may do nothing at all. Same reasoning as
+/// [`DcOffset::effective`]: the mode is not the routing.
+#[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "camelCase"))]
+pub struct Spdif {
+    /// What feeds the S/PDIF output, e.g. `"USB 5/6"`.
+    ///
+    /// Block 3's capture side is the S/PDIF output, so this is always carrying something.
+    pub output_from: String,
+    /// The USB capture channels carrying the S/PDIF input, e.g. `"capture 15/16"`.
+    ///
+    /// `None` means the input reaches nothing: the host cannot hear it, whatever the
+    /// mode says.
+    pub input_to: Option<String>,
 }
 
 /// One channel strip within a mix.
@@ -169,6 +194,41 @@ fn mix_feeding_output(state: &DeviceState, output: u8) -> Option<String> {
     None
 }
 
+/// Describes what the S/PDIF processor is carrying in each direction.
+fn spdif(state: &DeviceState) -> Spdif {
+    // Which of the 16 USB capture channels are listening to the S/PDIF input. Blocks 0
+    // and 1 are capture 1-8 and 9-16, so the channel number runs across both.
+    let listening: Vec<u8> = (0..16u8)
+        .filter(|&ch| {
+            matches!(
+                state
+                    .config
+                    .capture_source(usize::from(ch) / 8, usize::from(ch) % 8),
+                Some(Source::Spdif(_))
+            )
+        })
+        .map(|ch| ch + 1)
+        .collect();
+
+    let input_to = match listening.as_slice() {
+        [] => None,
+        [a, b] if *b == a + 1 => Some(format!("capture {a}/{b}")),
+        chans => Some(format!(
+            "capture {}",
+            chans
+                .iter()
+                .map(u8::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    };
+
+    Spdif {
+        output_from: source_label(state, 3, 0, true),
+        input_to,
+    }
+}
+
 /// One DC-blocking filter, covering a pair of analogue inputs.
 #[derive(Debug, Clone, PartialEq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
@@ -214,6 +274,7 @@ pub fn status(state: &DeviceState) -> Status {
         editing: state.editing,
         dirty: state.dirty,
         mixer2: state.config.options.mixer2,
+        spdif: (!state.config.options.mixer2).then(|| spdif(state)),
         dsp_load: state
             .identity
             .usage

@@ -74,6 +74,7 @@ button.primary { background: var(--accent); color: var(--accent-ink); border-col
 .brand { font-weight: 650; letter-spacing: .04em; }
 .spacer { flex: 1; }
 .status { color: var(--muted); font-size: 12.5px; display: flex; gap: 14px; flex-wrap: wrap; }
+.status .dim { opacity: .72; }
 .status b { color: var(--ink); font-weight: 550; }
 .actions { display: flex; gap: 7px; }
 .slot {

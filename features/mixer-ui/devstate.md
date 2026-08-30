@@ -57,6 +57,12 @@ from the manual or the reference tool.
 - **`26H` takes a parameter** — `1` hosted defaults, `0` standalone. It resets the
   *current* configuration and leaves both flash slots alone.
 - Reserved dump words 719–767 read all zero.
+- **Destinations sum.** Several mixes may target the same output and are added there
+  (manual p.11), which is how both mixer banks can feed the main outs. A mix, by
+  contrast, has exactly **one** destination.
+- **Block 3's capture side feeds the S/PDIF output**, not the reverse. Its sources should
+  be DAW channels 5–6; pointing them at `Source::Spdif` turns the optical output into a
+  passthrough of the optical input.
 - The published macro → raw curve is an **approximation** of what the firmware runs.
   Composing the documented curves reproduces unity exactly (macro 103 → `0x2000`) but is
   ~0.07 dB out elsewhere (macro 100 computes 6889; the module settled at 6832). Nothing
@@ -139,6 +145,16 @@ single defect.
 - **An output with no mix routed to it ignores its DC offset**, silently — the module
   implements offsets with the mixer hardware. `view::dc_offsets` computes this per output
   and the UI marks the inert ones.
+- **A mode bit is not a routing statement**, and the UI must not report one as the other.
+  Options bit 0 says block 3 *is* the S/PDIF processor; it does not say either direction
+  carries anything. `view::status` therefore reports what the S/PDIF output is fed from
+  and whether any capture channel listens to the input, and the header shows both. Same
+  rule as the DC offsets above: the mode is not the routing.
+- **`presets::hosted()` deliberately deviates from the module's factory default.** USB
+  capture 15/16 carry **MIX 1/2** rather than the S/PDIF input, giving the DAW a stereo
+  reference recording of exactly what leaves the main outs, sample-aligned with the 14
+  multitracks. The cost is that the S/PDIF input no longer reaches the host. This is a
+  trade, not an error — do not "correct" it back without knowing which side is wanted.
 
 ⚠️ **`frontendDist` is baked into the binary at compile time.** Editing `web/` requires
 rebuilding the shell, or you are looking at the previous UI. The symptom — correct data in
