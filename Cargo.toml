@@ -1,0 +1,16 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/es9-protocol",
+    "crates/es9-device",
+    "crates/es9-midi",
+    "crates/es9-audio",
+    "crates/es9-wasm",
+]
+
+# The desktop shell is deliberately not a member. Tauri pulls GTK and dbus on Linux, and
+# the repo is edited in WSL2 where none of that exists and the app could never run
+# anyway — the ES-9, its ASIO driver and WebView2 are all on the Windows host. Keeping it
+# out means the Linux test loop stays fast and honest. Build it with
+# `scripts/win-build.ps1 -App` on Windows.
+exclude = ["crates/es9-app"]

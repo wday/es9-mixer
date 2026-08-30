@@ -1,0 +1,248 @@
+:root {
+  color-scheme: light dark;
+  --bg: #f6f7f9;
+  --panel: #ffffff;
+  --ink: #16181d;
+  --muted: #666e7a;
+  --line: #d8dde4;
+  --accent: #2f6feb;
+  --accent-ink: #ffffff;
+  --warn-bg: #fff4d6;
+  --warn-line: #e0b64a;
+  --warn-ink: #6b4c00;
+  --cell: #eef1f5;
+  --on: #2f6feb;
+  --tx: #7a4ecc;
+  --rx: #1d8a54;
+  --radius: 7px;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --panel: #1c1f25;
+    --ink: #e7eaef;
+    --muted: #939cab;
+    --line: #2e3440;
+    --accent: #5b8dff;
+    --accent-ink: #0d1117;
+    --warn-bg: #3a2f10;
+    --warn-line: #8a6d1f;
+    --warn-ink: #f0dca0;
+    --cell: #252932;
+    --on: #5b8dff;
+    --tx: #b48cff;
+    --rx: #58d19b;
+  }
+}
+* { box-sizing: border-box; }
+
+/* The window is the scroll container, not the page. Each panel fills what is left below
+   the header and tabs, and scrolls its own content exactly once. Without this the page
+   scrolls *and* the matrix scrolls, and a matrix cell can only be reached by driving two
+   scrollbars against each other. */
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+button {
+  font: inherit;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 5px 11px;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .4; cursor: default; }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+
+.bar {
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 20;
+}
+.brand { font-weight: 650; letter-spacing: .04em; }
+.spacer { flex: 1; }
+.status { color: var(--muted); font-size: 12.5px; display: flex; gap: 14px; flex-wrap: wrap; }
+.status b { color: var(--ink); font-weight: 550; }
+.actions { display: flex; gap: 7px; }
+.slot {
+  font-size: 12px; padding: 3px 10px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--cell);
+  display: flex; align-items: center; gap: 7px;
+}
+.slot .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); }
+.slot.dirty .dot { background: #e0932a; }
+
+.tabs { display: flex; gap: 2px; padding: 0 16px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; border-radius: 0; background: none; padding: 9px 14px; color: var(--muted); border-bottom: 2px solid transparent; }
+.tabs button.on { color: var(--ink); border-bottom-color: var(--accent); font-weight: 550; }
+
+.notice {
+  margin: 12px 16px 0; padding: 10px 13px;
+  background: var(--warn-bg); border: 1px solid var(--warn-line);
+  border-radius: var(--radius); color: var(--warn-ink); font-size: 13px;
+}
+.notice h4 { margin: 0 0 5px; font-size: 13px; }
+.notice ul { margin: 4px 0 0; padding-left: 18px; columns: 2; font-family: var(--mono); font-size: 11.5px; }
+
+/* `min-height: 0` is what actually lets a flex child shrink and scroll; without it the
+   child is floored at its content height and the scrollbar lands on the body instead. */
+main { padding: 16px; flex: 1; min-height: 0; display: flex; }
+/* `min-width: 0` alongside `min-height: 0`: a flex item defaults to `min-*: auto`, which
+   floors it at its content size, so without this the panel refuses to shrink and its text
+   runs off the right edge instead of wrapping. */
+.panel { flex: 1; min-height: 0; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.panel > .routing-head { flex: none; }
+/* `!important` earns its place here: panels are laid out by ID selectors, which outrank
+   any class-based hidden rule, so without it a hidden panel stays on screen and every
+   tab renders on top of the mixer. */
+[hidden] { display: none !important; }
+#panel-mixer { display: grid; grid-template-columns: 232px 1fr; gap: 16px; align-items: start; overflow: auto; }
+
+.mixlist { display: flex; flex-direction: column; gap: 4px; }
+.mixlist button {
+  display: block; width: 100%; text-align: left; padding: 8px 11px;
+}
+.mixlist button.on { border-color: var(--accent); background: var(--cell); }
+.mixlist .name { font-weight: 550; }
+.mixlist .dest { color: var(--muted); font-size: 12px; }
+
+.console { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; }
+.console-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.console-head h2 { margin: 0; font-size: 17px; }
+.console-head .dest { color: var(--muted); }
+.console-head label { margin-left: auto; color: var(--muted); font-size: 12.5px; display: flex; align-items: center; gap: 6px; }
+
+.strips { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 6px; }
+.strip {
+  flex: 0 0 84px; display: flex; flex-direction: column; align-items: center; gap: 7px;
+  background: var(--cell); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 6px;
+}
+.strip .src { font-size: 11.5px; font-weight: 550; text-align: center; min-height: 2.6em; }
+.strip input[type=range].fader {
+  writing-mode: vertical-lr; direction: rtl;
+  width: 26px; height: 190px; accent-color: var(--accent);
+}
+.strip .db { width: 100%; text-align: center; font-family: var(--mono); font-size: 12px; padding: 3px; }
+.strip .pan { width: 100%; accent-color: var(--accent); }
+.strip .panval { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+.cc { font-family: var(--mono); font-size: 10.5px; color: var(--muted); background: var(--panel); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+.cc.pan { border-style: dashed; }
+details.raw { width: 100%; margin-top: 2px; }
+details.raw summary { font-size: 10.5px; color: var(--muted); cursor: pointer; }
+details.raw .vals { font-family: var(--mono); font-size: 10.5px; color: var(--muted); word-break: break-all; }
+details.raw .caveat { font-size: 10px; color: var(--warn-ink); background: var(--warn-bg); border-radius: 4px; padding: 3px 5px; margin-top: 4px; }
+
+.routing-head { margin: 18px 0 8px; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.routing-head:first-child { margin-top: 0; }
+.routing-head h2 { margin: 0; font-size: 15px; }
+.hint { margin: 0; color: var(--muted); font-size: 12.5px; }
+
+/* The single scrolling region on a routing tab. It takes the leftover height rather than
+   a fixed fraction of the viewport, so there is nothing to scroll around it. */
+.matrix-wrap { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
+table.matrix { border-collapse: separate; border-spacing: 0; font-size: 11.5px; }
+table.matrix th, table.matrix td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 0; }
+table.matrix th.rowhead {
+  position: sticky; left: 0; z-index: 2; background: var(--panel);
+  text-align: left; padding: 2px 9px; white-space: nowrap; font-weight: 450; min-width: 92px;
+}
+table.matrix thead th { position: sticky; top: 0; z-index: 3; background: var(--panel); padding: 4px 3px; font-weight: 550; }
+table.matrix thead th.corner { left: 0; z-index: 4; }
+table.matrix tr.group th { background: var(--cell); font-weight: 650; text-align: left; padding: 3px 9px; }
+td.cell { width: 22px; height: 20px; cursor: pointer; }
+td.cell:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+td.cell.on { background: var(--on); }
+td.blockgap { border-right: 2px solid var(--muted); }
+
+.links { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 5px; }
+.links label { display: flex; align-items: center; gap: 7px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 9px; font-size: 12.5px; cursor: pointer; }
+
+.ccgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(232px, 1fr)); gap: 4px; }
+.ccrow { display: flex; gap: 9px; background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 4px 9px; font-size: 12px; }
+.ccrow .n { font-family: var(--mono); color: var(--muted); min-width: 34px; }
+.ccrow.unassigned { opacity: .45; }
+.ccrow.unassigned .t { font-style: italic; }
+
+.log { font-family: var(--mono); font-size: 11.5px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); max-height: 68vh; overflow: auto; }
+.log .row { display: grid; grid-template-columns: 46px 1fr 250px; gap: 10px; padding: 3px 10px; border-bottom: 1px solid var(--line); }
+.log .dir { font-weight: 650; }
+.log .dir.tx { color: var(--tx); }
+.log .dir.rx { color: var(--rx); }
+.log .hex { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Input DC blocking. The cards are wide because the state line has to be readable at a
+   glance: "on" and "off" alone do not tell you which setting destroys a CV. */
+.dcfilters { display: grid; grid-template-columns: repeat(auto-fill, minmax(268px, 1fr)); gap: 8px; }
+.dcfilter { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; cursor: pointer; }
+.dcfilter.on { border-color: var(--accent); }
+.dctext { display: flex; flex-direction: column; gap: 2px; }
+.dcname { font-size: 13px; font-weight: 600; }
+.dcstate { font-size: 11.5px; color: var(--muted); }
+.dcfilter.on .dcstate { color: var(--accent); }
+.dcwarn { grid-column: 1 / -1; font-size: 11px; color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 5px; padding: 5px 7px; margin-top: 4px; }
+
+/* Meters. Bars are updated in place rather than rebuilt, so the layout must not depend
+   on content width. */
+.meters { display: flex; flex-direction: column; gap: 3px; }
+.meter { display: grid; grid-template-columns: 190px 1fr 58px 74px; align-items: center; gap: 10px; }
+.mlabel { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mbar { position: relative; height: 14px; background: var(--cell); border: 1px solid var(--line); border-radius: 3px; overflow: hidden; }
+.mfill { position: absolute; inset: 0 auto 0 0; background: var(--rx); transition: width 40ms linear; }
+.mhold { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ink); opacity: .55; }
+.mdb { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: right; }
+.mdc { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: right; opacity: .5; }
+.mdc.offset { opacity: 1; color: var(--warn-ink); }
+.meter.clip .mfill { background: #d4483b; }
+.meter.clip .mdb { color: #d4483b; font-weight: 650; }
+
+/* Output DC offsets. An output with no mix routed to it cannot take an offset, and says
+   so rather than presenting a control that quietly does nothing. */
+.dcoffsets { flex: none; display: flex; flex-direction: column; gap: 6px; overflow: auto; }
+.dcoffset { display: grid; grid-template-columns: 92px minmax(160px, 380px) 56px 1fr; align-items: center; gap: 12px; }
+.dolabel { font-size: 13px; font-weight: 600; }
+.doslider { width: 100%; }
+.dovalue { font-family: var(--mono); font-size: 12px; text-align: right; color: var(--muted); }
+.donote { font-size: 11.5px; color: var(--muted); }
+.dcoffset.inert .dolabel, .dcoffset.inert .dovalue { opacity: .45; }
+.dcoffset.inert .donote { color: var(--warn-ink); background: var(--warn-bg); border: 1px solid var(--warn-line); border-radius: 4px; padding: 2px 7px; justify-self: start; }
+
+/* Panels whose content is a plain list still need their own scroll, for the same reason
+   the matrices do. */
+#panel-meters .meters,
+#panel-ccmap .ccgrid,
+#panel-monitor .log { overflow: auto; min-height: 0; }
+#panel-ccmap .ccgrid { flex: 1; }
+#panel-monitor .log { flex: 1; max-height: none; }
+#panel-meters .meters { flex: 1; }
+/* One scroll region for the whole analogue tab: two short sections that together may not
+   fit, but neither of which is worth its own scrollbar. */
+.analogue-scroll { flex: 1; min-height: 0; min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+#panel-analogue .dcfilters { flex: none; align-content: start; }
+
+/* Presets. */
+.presets-scroll { flex: 1; min-height: 0; min-width: 0; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.defaults { display: flex; flex-direction: column; gap: 6px; }
+.defaultrow, .presetrow { display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }
+.defaultrow { grid-template-columns: 1fr auto; }
+.defaultname, .presetname { font-size: 13px; font-weight: 600; }
+.defaultdetail, .presetmeta { font-size: 11.5px; color: var(--muted); }
+.presetsave { display: flex; gap: 8px; }
+.presetsave input { flex: 1; max-width: 420px; font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 7px 10px; }
+.presetlist { display: flex; flex-direction: column; gap: 6px; }
+.presetrow.broken { border-color: var(--warn-line); }
+.presetproblem { font-size: 11.5px; color: var(--warn-ink); background: var(--warn-bg); border-radius: 4px; padding: 2px 7px; margin-top: 4px; display: inline-block; }
+/* An armed button has to look different from an ordinary one, or the second click is a
+   surprise rather than a confirmation. */
+button.armed { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); font-weight: 650; }

@@ -1,0 +1,16 @@
+[package]
+name = "es9-device"
+version = "0.1.0"
+edition = "2024"
+description = "ES-9 device state, actions, undo, and an offline mock device"
+license = "MIT"
+
+[dependencies]
+es9-protocol = { path = "../es9-protocol" }
+serde = { version = "1", features = ["derive"], optional = true }
+
+[features]
+serde = ["dep:serde"]
+
+[lints.rust]
+missing_docs = "warn"

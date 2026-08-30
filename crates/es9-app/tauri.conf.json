@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ES-9 Mixer",
+  "version": "0.1.0",
+  "identifier": "uk.co.expert-sleepers.es9-mixer-alt",
+  "build": {
+    "frontendDist": "../../web"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "title": "ES-9 Mixer",
+        "width": 1120,
+        "height": 700,
+        "minWidth": 820,
+        "minHeight": 540,
+        "label": "main",
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all",
+    "icon": [
+      "icons/icon.ico"
+    ]
+  }
+}

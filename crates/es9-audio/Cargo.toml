@@ -1,0 +1,23 @@
+[package]
+name = "es9-audio"
+version = "0.1.0"
+edition = "2024"
+description = "Audio capture and metering for the ES-9"
+# On Windows this crate links the Steinberg ASIO SDK under its GPLv3 option, so this
+# crate and anything that links it are GPL-3.0. The pure crates stay MIT.
+license = "GPL-3.0-only"
+
+[dependencies]
+cpal = "0.15"
+serde = { version = "1", features = ["derive"] }
+
+# WASAPI shared mode can only run at the Windows endpoint's configured format — it
+# refuses any other rate — so it neither chooses nor honestly reports the module's real
+# sample rate. ASIO drives the device at its own rate instead, which a configuration
+# tool has to do. Needs CPAL_ASIO_DIR pointing at the Steinberg SDK; see
+# `features/mixer-ui/plan.md` §0.
+[target.'cfg(windows)'.dependencies]
+cpal = { version = "0.15", features = ["asio"] }
+
+[lints.rust]
+missing_docs = "warn"

@@ -1,0 +1,4 @@
+/target
+/web/pkg
+/dumps
+/crates/es9-app/gen/schemas

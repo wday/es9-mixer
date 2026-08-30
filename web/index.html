@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ES-9 Mixer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="bar">
+  <div class="brand">ES&#8209;9</div>
+  <div class="status" id="status"></div>
+  <div class="spacer"></div>
+  <div class="slot" id="slot"></div>
+  <div class="actions">
+    <button id="undo" title="Undo">Undo</button>
+    <button id="redo" title="Redo">Redo</button>
+    <button id="save" class="primary">Save to slot</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="mixer" class="on">Mixer</button>
+  <button data-tab="capture">Capture</button>
+  <button data-tab="outputs">Outputs</button>
+  <button data-tab="analogue">Analogue</button>
+  <button data-tab="meters" id="tab-meters" hidden>Meters</button>
+  <button data-tab="presets">Presets</button>
+  <button data-tab="ccmap">CC Map</button>
+  <button data-tab="monitor">Monitor</button>
+</nav>
+
+<div id="notice" class="notice" hidden></div>
+
+<main>
+  <section id="panel-mixer" class="panel">
+    <aside class="mixlist" id="mixlist"></aside>
+    <div class="console" id="console"></div>
+  </section>
+
+  <section id="panel-capture" class="panel" hidden>
+    <div class="routing-head">
+      <h2>Capture &mdash; what each channel listens to</h2>
+      <p class="hint">Each column takes exactly one source, so clicking a cell <em>moves</em> the assignment rather than adding one.</p>
+    </div>
+    <div class="matrix-wrap" id="matrix-capture"></div>
+  </section>
+
+  <section id="panel-outputs" class="panel" hidden>
+    <div class="routing-head">
+      <h2>Outputs &mdash; where each channel is sent</h2>
+      <p class="hint">Each column takes exactly one destination, so clicking a cell <em>moves</em> the assignment.</p>
+    </div>
+    <div class="matrix-wrap" id="matrix-outputs"></div>
+  </section>
+
+  <section id="panel-analogue" class="panel" hidden>
+    <div class="analogue-scroll">
+    <div class="routing-head">
+      <h2>Input DC blocking</h2>
+      <p class="hint">
+        The inputs are DC coupled, so they carry CV as happily as audio. Each ADC has a
+        DC-blocking filter: turn it <strong>on for audio</strong>, and it must be
+        <strong>off for CV</strong> &mdash; the filter removes exactly the constant offset
+        a CV consists of.
+      </p>
+      <p class="hint">
+        The filters switch in <strong>pairs</strong>, and one pair is not what you would
+        guess: <strong>inputs 3 and 8 share a filter</strong>. The pairing follows the ADC
+        channels, not the numbers on the panel.
+      </p>
+    </div>
+    <div class="dcfilters" id="dcfilters"></div>
+
+    <div class="routing-head">
+      <h2>Output DC offsets</h2>
+      <p class="hint">
+        Trims a constant voltage on the eight 3.5mm analogue outputs. The module implements
+        this <strong>with the mixer hardware</strong>, so an output with no mix routed to it
+        ignores the setting entirely &mdash; those are marked below rather than left to fail
+        silently. Double-click a slider to return it to zero.
+      </p>
+      <p class="hint">
+        To trim against a measurement rather than by ear, patch the output back into an
+        input and watch the <strong>DC</strong> column on the Meters tab.
+      </p>
+    </div>
+    <div class="dcoffsets" id="dcoffsets"></div>
+    </div>
+  </section>
+
+  <section id="panel-meters" class="panel" hidden>
+    <div class="routing-head">
+      <h2>Input meters</h2>
+      <p class="hint">
+        The module reports no audio levels over MIDI, so these are measured from the
+        sixteen USB capture channels. Each meter is labelled with whatever the routing
+        currently sends to that channel &mdash; change the routing and the meters follow.
+      </p>
+      <p class="hint">
+        The <strong>DC</strong> column is the mean sample value. Peak and RMS both discard
+        sign, so an idle channel resting at a constant voltage reads as silence on those
+        two and only shows up here. Patch an output back to an input to trim its offset
+        against this reading.
+      </p>
+      <p class="hint" id="meters-status"></p>
+    </div>
+    <div class="meters" id="meters"></div>
+  </section>
+
+  <section id="panel-presets" class="panel" hidden>
+    <div class="presets-scroll">
+      <div class="routing-head">
+        <h2>Factory defaults</h2>
+        <p class="hint">
+          Resets the <strong>current</strong> configuration to one of the module's two
+          default sets. This does <strong>not</strong> touch either flash slot &mdash; the
+          module keeps the change only until it is saved, so nothing is lost permanently
+          until you press Save. Undo reverses it.
+        </p>
+      </div>
+      <div class="defaults" id="defaults"></div>
+
+      <div class="routing-head">
+        <h2>Your presets</h2>
+        <p class="hint">
+          A preset is the module's own configuration dump, stored as a plain
+          <code>.syx</code> file, so it is interchangeable with anything else that speaks
+          the protocol. Loading one is a single undoable step and is verified by reading
+          the configuration back.
+        </p>
+      </div>
+      <div class="presetsave">
+        <input id="presetname" type="text" placeholder="Name for the current configuration" maxlength="64" />
+        <button id="presetsavebtn" class="primary">Save current</button>
+      </div>
+      <div class="presetlist" id="presetlist"></div>
+    </div>
+  </section>
+
+  <section id="panel-ccmap" class="panel" hidden>
+    <div class="routing-head">
+      <h2>Stereo links</h2>
+      <p class="hint">
+        A link merges two channels into one strip &mdash; and silently rewrites the CC map
+        below. They sit together so a toggle and its consequence are visible at once.
+      </p>
+    </div>
+    <div class="links" id="links"></div>
+    <div class="routing-head">
+      <h2>Resolved MIDI CC map</h2>
+      <p class="hint">CC numbers are fixed in hardware and cannot be reassigned. This is what they control under the current link configuration.</p>
+    </div>
+    <div class="ccgrid" id="ccgrid"></div>
+  </section>
+
+  <section id="panel-monitor" class="panel" hidden>
+    <div class="routing-head">
+      <h2>Protocol monitor</h2>
+      <p class="hint">Every message in both directions. The byte after <code>34</code> is the CC number for the control you just moved.</p>
+      <button id="clearlog">Clear</button>
+    </div>
+    <div class="log" id="log"></div>
+  </section>
+</main>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

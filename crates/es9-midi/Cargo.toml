@@ -1,0 +1,20 @@
+[package]
+name = "es9-midi"
+version = "0.1.0"
+edition = "2024"
+description = "MIDI transport for the ES-9, with a protocol monitor"
+license = "MIT"
+
+[dependencies]
+es9-protocol = { path = "../es9-protocol" }
+es9-device = { path = "../es9-device" }
+midir = "0.10"
+
+# The ES-9's MIDI is published through Windows MIDI Services, which the legacy WinMM
+# backend cannot see — it enumerates only virtual ports. The WinRT backend
+# (Windows.Devices.Midi) does see it, so Windows builds swap `midir`'s backend.
+[target.'cfg(windows)'.dependencies]
+midir = { version = "0.10", features = ["winrt"] }
+
+[lints.rust]
+missing_docs = "warn"

@@ -1,0 +1,19 @@
+[package]
+name = "es9-wasm"
+version = "0.1.0"
+edition = "2024"
+description = "Browser bridge: the ES-9 device model driving a mock module"
+license = "MIT"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+es9-protocol = { path = "../es9-protocol" }
+es9-device = { path = "../es9-device", features = ["serde"] }
+wasm-bindgen = "0.2.127"
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+
+[lints.rust]
+missing_docs = "warn"
