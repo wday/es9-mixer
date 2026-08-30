@@ -150,18 +150,25 @@ single defect.
   carries anything. `view::status` therefore reports what the S/PDIF output is fed from
   and whether any capture channel listens to the input, and the header shows both. Same
   rule as the DC offsets above: the mode is not the routing.
-- **`es9-device::presets` drives the mock, not the hardware.** The desktop app's "restore
-  defaults" sends `26H` and re-reads, so the module applies its *own* defaults; the two
-  presets are only this project's copy of them, used to boot the browser prototype and the
-  offline mock. A change to `presets.rs` therefore changes mock fidelity, not what a real
-  module does.
-- **`presets::hosted()` deliberately deviates from the module's factory default.** USB
+- **Three kinds of "preset" are named apart, and must stay that way.**
+
+  | Name | What it is | Reaches a module? |
+  |---|---|---|
+  | **Factory defaults** | The module's own, applied by `26H` | Yes — the module applies them itself |
+  | **Mixer defaults** (`es9-device::mixer_defaults`) | This project's opinionated pair | **No** — mock and prototype only |
+  | **User presets** (`es9-app::presets`) | Saved `08H` dumps as `.syx` on disk | Yes, via `09H` upload |
+
+  The desktop app's reset sends `26H` and re-reads, so editing `mixer_defaults` changes
+  mock fidelity and nothing else. Conflating the first two is how someone concludes a
+  code change altered their rig, or the reverse.
+- **`mixer_defaults::hosted()` deliberately deviates from the factory default.** USB
   capture 15/16 carry **MIX 1/2** rather than the S/PDIF input, giving the DAW a stereo
   reference recording of exactly what leaves the main outs, sample-aligned with the 14
   multitracks. The cost is that the S/PDIF input no longer reaches the host. This is a
   trade, not an error — do not "correct" it back without knowing which side is wanted.
-  Note the consequence on hardware: **`26H` restores the factory routing**, which puts
-  S/PDIF back on capture 15/16 and removes the reference capture.
+  Note the consequence on hardware: **a factory reset replaces routing too**, putting
+  S/PDIF back on capture 15/16 and removing any reference capture set up there. The
+  Presets tab says so.
 
 ⚠️ **`frontendDist` is baked into the binary at compile time.** Editing `web/` requires
 rebuilding the shell, or you are looking at the previous UI. The symptom — correct data in

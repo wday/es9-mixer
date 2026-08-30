@@ -9,7 +9,7 @@
 use es9_device::action::Action;
 use es9_device::monitor::{Direction, Monitor};
 use es9_device::state::EditTarget;
-use es9_device::{DeviceState, MockEs9, Session, presets, view};
+use es9_device::{DeviceState, MockEs9, Session, mixer_defaults, view};
 use es9_protocol::ccmap::Control;
 use es9_protocol::config::Options;
 use es9_protocol::tables::Family;
@@ -107,9 +107,9 @@ impl Bridge {
     #[wasm_bindgen(constructor)]
     pub fn new() -> Self {
         let mut mock = MockEs9::default();
-        mock.config = presets::standalone();
-        *mock.flash[0] = presets::standalone();
-        *mock.flash[1] = presets::hosted();
+        mock.config = mixer_defaults::standalone();
+        *mock.flash[0] = mixer_defaults::standalone();
+        *mock.flash[1] = mixer_defaults::hosted();
         // A sensible opening mix so the faders are not all at silence.
         for cc in 0..16u8 {
             mock.macro_values[usize::from(cc)] = es9_protocol::scales::MACRO_UNITY;
@@ -288,9 +288,9 @@ impl Bridge {
     #[wasm_bindgen(js_name = resetDefaults)]
     pub fn reset_defaults(&mut self, standalone: bool) -> JsValue {
         let config = if standalone {
-            presets::standalone()
+            mixer_defaults::standalone()
         } else {
-            presets::hosted()
+            mixer_defaults::hosted()
         };
         self.dispatch(Action::LoadConfig(Box::new(config)))
     }

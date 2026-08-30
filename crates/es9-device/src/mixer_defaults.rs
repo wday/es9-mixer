@@ -1,9 +1,21 @@
-//! The two default configurations the module ships with.
+//! ES-9 Mixer's own default configurations — **not** the module's factory defaults.
 //!
-//! The manual describes these as the targets of its two "reset to defaults" buttons: one
-//! suited to hosted use, one to standalone. They differ in what feeds the mixer, which is
-//! the whole point — with no computer attached, USB playback is silent, so a standalone
-//! patch takes the analogue inputs instead.
+//! Three things in this project are easy to confuse, so they are named apart:
+//!
+//! | | What it is |
+//! |---|---|
+//! | **Factory defaults** | The module's own, applied by `26H`. Nothing here produces them. |
+//! | **Mixer defaults** (this module) | This project's opinionated pair, below. |
+//! | **User presets** (`es9-app::presets`) | Saved `08H` dumps in `.syx` files on disk. |
+//!
+//! These two are modelled on the factory pair and differ from them deliberately — see
+//! `base()` for the capture 15/16 deviation. They are the starting point for the offline
+//! mock and the browser prototype; **the desktop app never applies them to a module**,
+//! because "reset to defaults" sends `26H` and lets the module apply its own.
+//!
+//! The pair differ from each other in what feeds the mixer, which is the point: with no
+//! computer attached USB playback is silent, so the standalone patch takes the analogue
+//! inputs instead.
 
 use es9_protocol::config::{Config, Options};
 use es9_protocol::tables::{Destination, Source};
@@ -82,7 +94,8 @@ fn base() -> Config {
     c
 }
 
-/// Defaults suited to hosted use: the mixer takes USB playback, S/PDIF is enabled.
+/// **Mixer hosted default**: the mixer takes USB playback, block 3 is the S/PDIF
+/// processor carrying DAW 5-6 out.
 pub fn hosted() -> Config {
     let mut c = base();
     c.options = Options {
@@ -100,8 +113,8 @@ pub fn hosted() -> Config {
     c
 }
 
-/// Defaults suited to standalone use: the mixer takes the analogue inputs, and the
-/// second mixer is enabled.
+/// **Mixer standalone default**: the mixer takes the analogue inputs, and block 3 is the
+/// second mixer bank rather than the S/PDIF processor.
 ///
 /// This is the starting point for a DAW-free rig, where the module runs from flash and a
 /// MIDI controller drives the macro mix.

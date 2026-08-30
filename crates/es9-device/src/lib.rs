@@ -6,9 +6,9 @@
 #![forbid(unsafe_code)]
 
 pub mod action;
+pub mod mixer_defaults;
 pub mod mock;
 pub mod monitor;
-pub mod presets;
 pub mod state;
 pub mod throttle;
 pub mod view;

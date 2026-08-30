@@ -606,20 +606,33 @@ function armButton(button, key, label, confirmLabel, run) {
 function renderDefaults() {
   const host = $('defaults');
   host.innerHTML = '';
+  // "Factory" is in every label because the module applies these itself, via 26H. The
+  // app's own defaults (es9-device::mixer_defaults) are a separate, opinionated pair and
+  // are never sent to a module; conflating the two loses routing without warning.
   for (const [standalone, name, detail] of [
-    [false, 'hosted', 'mixer inputs are the USB channels, S/PDIF enabled'],
-    [true, 'standalone', 'mixer inputs are the analogue inputs, second mixer enabled'],
+    [
+      false,
+      'factory hosted',
+      'mixer takes USB 1-8; block 3 is the S/PDIF processor, and capture 15/16 carry the S/PDIF input',
+    ],
+    [
+      true,
+      'factory standalone',
+      'mixer takes the analogue inputs; block 3 is the second mixer bank rather than S/PDIF',
+    ],
   ]) {
     const row = document.createElement('div');
     row.className = 'defaultrow';
     const text = document.createElement('div');
     text.className = 'defaulttext';
-    text.innerHTML = `<div class="defaultname">Reset to ${name} defaults</div><div class="defaultdetail">${detail}</div>`;
+    text.innerHTML = `<div class="defaultname">Reset to ${name}</div><div class="defaultdetail">${detail}</div>`;
     const button = document.createElement('button');
     armButton(button, `reset:${name}`, 'Reset', 'Confirm reset', async () => {
       try {
         await bridge.resetDefaults(standalone);
-        showNotice(`Reset to ${name} defaults. Nothing is saved to flash until you press Save.`);
+        showNotice(
+          `Reset to ${name}. Routing is part of that reset. Nothing is saved to flash until you press Save.`,
+        );
       } catch (e) {
         showNotice(`Reset failed: ${e}`);
       }

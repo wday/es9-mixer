@@ -244,7 +244,7 @@ fn a_resting_pan_reads_as_centre_not_hard_left() {
     // written (checklist H3). Reading the pan CC's own value gives zero, which renders
     // every strip hard left — which is exactly what the app did before this was measured.
     let mut state = DeviceState {
-        config: es9_device::presets::standalone(),
+        config: es9_device::mixer_defaults::standalone(),
         ..Default::default()
     };
     // Link mixes 1/2 so the strips have pans at all.
@@ -264,7 +264,7 @@ fn a_resting_pan_reads_as_centre_not_hard_left() {
 #[test]
 fn pan_follows_the_aux_byte_of_its_level_cell() {
     let mut state = DeviceState {
-        config: es9_device::presets::standalone(),
+        config: es9_device::mixer_defaults::standalone(),
         ..Default::default()
     };
     state
@@ -290,7 +290,7 @@ fn pan_follows_the_aux_byte_of_its_level_cell() {
 #[test]
 fn dc_offsets_cover_the_eight_analogue_outputs() {
     let state = DeviceState {
-        config: es9_device::presets::standalone(),
+        config: es9_device::mixer_defaults::standalone(),
         ..Default::default()
     };
     let offsets = view::dc_offsets(&state);
@@ -305,7 +305,7 @@ fn an_offset_is_only_effective_where_a_mixer_feeds_the_output() {
     // playback silently ignores it. In the standalone preset, mixes 5-8 are routed to
     // Outputs 1-4, so those four take an offset and the rest do not.
     let state = DeviceState {
-        config: es9_device::presets::standalone(),
+        config: es9_device::mixer_defaults::standalone(),
         ..Default::default()
     };
     let offsets = view::dc_offsets(&state);
@@ -327,7 +327,7 @@ fn an_offset_is_only_effective_where_a_mixer_feeds_the_output() {
 #[test]
 fn routing_a_mix_to_an_output_makes_its_offset_effective() {
     let mut state = DeviceState {
-        config: es9_device::presets::standalone(),
+        config: es9_device::mixer_defaults::standalone(),
         ..Default::default()
     };
     assert!(!view::dc_offsets(&state)[4].effective);
@@ -352,7 +352,7 @@ fn spdif_status_reports_both_directions_not_just_the_mode() {
     // nothing about whether either direction reaches anything, which is the whole point
     // of reporting more than the mode.
     let state = DeviceState {
-        config: es9_device::presets::hosted(),
+        config: es9_device::mixer_defaults::hosted(),
         ..Default::default()
     };
     let status = view::status(&state);
@@ -372,7 +372,7 @@ fn spdif_status_reports_both_directions_not_just_the_mode() {
 #[test]
 fn capturing_the_spdif_input_shows_where_it_lands() {
     let mut state = DeviceState {
-        config: es9_device::presets::hosted(),
+        config: es9_device::mixer_defaults::hosted(),
         ..Default::default()
     };
     // Put the S/PDIF input back on capture 15/16, the module's own default.
@@ -388,7 +388,7 @@ fn capturing_the_spdif_input_shows_where_it_lands() {
 #[test]
 fn enabling_mixer_2_leaves_no_spdif_to_report() {
     let state = DeviceState {
-        config: es9_device::presets::standalone(),
+        config: es9_device::mixer_defaults::standalone(),
         ..Default::default()
     };
     let status = view::status(&state);

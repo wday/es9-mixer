@@ -422,7 +422,7 @@ fn loading_a_configuration_replaces_everything_and_undoes_as_one_step() {
 
     // The hosted preset differs from the standalone one the mock boots with, so this is
     // a genuine whole-configuration change rather than a no-op.
-    let target = es9_device::presets::hosted();
+    let target = es9_device::mixer_defaults::hosted();
     assert_ne!(target, before, "the two presets must actually differ");
 
     let applied = session.dispatch(Action::LoadConfig(Box::new(target.clone())));
@@ -455,7 +455,7 @@ fn a_recorded_undo_reverses_something_the_module_did_itself() {
     let before = session.state.config.clone();
 
     // Stand in for the module having reset itself.
-    session.state.config = es9_device::presets::hosted();
+    session.state.config = es9_device::mixer_defaults::hosted();
     session.record_undo(Action::LoadConfig(Box::new(before.clone())));
     assert!(session.can_undo());
 
