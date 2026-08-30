@@ -10,25 +10,24 @@ where a MIDI controller rides the mix.
 
 ## Status
 
-The protocol layer, device model and browser prototype are done and tested. **The protocol
-layer is now confirmed against a real ES-9 running firmware 1.3.1**: a configuration dump
-decodes first time, and the pan centre bias and macro-mix word layout are settled. The
-remaining hardware checks need deliberate writes and an ear on the outputs — see
-`features/mixer-ui/plan.md` §8.
+Working and installed. `crates/es9-app` connects to the module over MIDI, shows its real
+configuration, and meters sixteen channels at 48 kHz over ASIO.
 
-Metering is proven: **16 capture channels at 48 kHz over ASIO**. WASAPI was rejected, not
+The protocol layer is verified against a real ES-9 on **firmware 1.3.1** — the pan
+storage, the macro/raw precedence and the chunked config upload are measured rather than
+assumed. Metering runs **alongside a DAW**: the ASIO driver is multi-client in practice,
+so the meters keep working with Ableton open on the same module. WASAPI is rejected, not
 for latency but because shared mode re-clocks the module to whatever rate Windows has
 configured for the endpoint.
 
-**The desktop shell works.** `crates/es9-app` connects to the module over MIDI, shows its
-real configuration, and meters sixteen channels at 48 kHz over ASIO.
-
 Tabs: **Mixer**, **Capture** and **Outputs** (one routing matrix each), **Analogue** (input
-DC blocking and output DC offsets), **Meters**, **CC Map** (with the stereo links that
-rewrite it), and **Monitor**.
+DC blocking and output DC offsets), **Meters**, **Presets**, **CC Map** (with the stereo
+links that rewrite it), and **Monitor**.
 
 Targets **firmware 1.3.x**. Firmware 1.2 used a different configuration dump format and is
 detected and rejected rather than misparsed.
+
+What is left, and what is still unverified on hardware, is in `features/mixer-ui/`.
 
 ## Layout
 
@@ -42,7 +41,7 @@ detected and rejected rather than misparsed.
 | `crates/es9-wasm` | Browser bridge driving the mock. |
 | `web/` | Frontend prototype. |
 | `docs/es9-sysex-protocol.md` | The protocol, from the manual's appendix and the official tool. |
-| `features/mixer-ui/` | Requirements, plan, development log. |
+| `features/mixer-ui/` | Requirements, remaining work, and the current development state. |
 
 ## Running the prototype
 

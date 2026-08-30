@@ -54,9 +54,10 @@ pub struct DeviceState {
     pub config: Config,
     /// Macro mix values, indexed by MIDI CC number.
     pub macro_values: Box<[u8; 128]>,
-    /// The second byte of each macro entry, preserved but not interpreted.
+    /// The second byte of each macro entry: **this is where pan is stored**.
     ///
-    /// See `docs/es9-sysex-protocol.md` open question Q1.
+    /// Pan is written to CC `(m+1)*8 + ch` but the module keeps it here, in the aux byte
+    /// of the level cell, as `written - 1`. See `docs/es9-sysex-protocol.md` §11.
     pub macro_aux: Box<[u8; 128]>,
     /// What the module has reported about itself.
     pub identity: Identity,

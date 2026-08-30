@@ -15,8 +15,10 @@ Sources, all archived under `docs/reference/`:
 > **The official config tool is MIT licensed** (Copyright (c) 2023 Expert Sleepers Ltd).
 > It may be referenced and derived from directly.
 
-Status: **specification-grounded, not yet hardware-verified.** The manual settles most of
-what was previously guessed; the remainder is in [Open questions](#open-questions).
+Status: **verified against a real ES-9 on firmware 1.3.1.** The manual is the
+specification; where hardware disagreed with it or with the reference tool, the measured
+behaviour is documented here and the manual's reading is not. What remains genuinely
+unknown is in [Open questions](#7-open-questions).
 
 > ### ⚠ The config dump format changed between firmware 1.2 and 1.3
 >
@@ -88,12 +90,19 @@ The manual also confirms the surrounding structure:
 
 Two representations of the same matrix exist, both live on the device:
 
-- **Raw mix** — one 21-bit linear gain per cell. Written with `0x60+mix`.
-- **Virtual mix** — a 7-bit level plus a 7-bit pan per cell, which the *device* expands
-  into raw gains. Written with `0x34`.
+- **Raw mix** — one 16-bit linear gain per cell, transmitted as 21 bits. Written with
+  `0x60+mix`.
+- **Macro mix** — a 7-bit level plus a 7-bit pan per cell, which the *device* expands into
+  raw gains. Written with `0x34`. (The 1.2 tool calls this the "virtual" mix.)
 
-The virtual layer is device-side, not tool-side: the mix dump (`0x11`) returns both
+The macro layer is device-side, not tool-side: the mix dump (`0x11`) returns both
 representations, and the tool never computes raw values from level/pan.
+
+**Macro drives raw.** A raw write sticks — `0x4000` written to a cell reads back as
+`0x4000` — but is replaced the moment anything moves that cell's macro control, including
+a MIDI CC arriving from a controller. So a raw value is durable only until the macro layer
+next touches it, and a host should treat the raw matrix as **read-only**: the numbers are
+the gains the hardware is really running, but writing them does not hold.
 
 ### Modes and flash slots
 
@@ -183,8 +192,9 @@ So the macro mix parameter space and the MIDI CC space are **the same 128-entry 
 `0x34 <cc> <value>` writes the same parameter that CC `<cc>` would. There is no separate
 pan command because pan is simply another entry in that space. See §5a for the mapping.
 
-This resolves what was open question Q3: pan for a stereo pair `(m, m+1)` lives at index
-`(m+1)*8 + ch`. The config tool's **write** is correct; its **read** is the buggy half.
+Pan for a stereo pair `(m, m+1)` is therefore *written* to index `(m+1)*8 + ch`. It is
+not *stored* there — see §11 — but both halves of the config tool's round trip are
+correct.
 
 ## 4. Commands: ES-9 to host
 
@@ -197,6 +207,15 @@ This resolves what was open question Q3: pan for a stereo pair `(m, m+1)` lives 
 | `0x14` | 21-bit | Sample rate / 4 |
 | `0x32` | NUL-terminated ASCII | **Message** |
 | `0x60+mix` | `ch`, 21-bit | Raw mixer gain changed |
+
+### The module answers back, with more than an echo
+
+A single `0x34` macro write draws an **unsolicited full `0x11` mix dump** carrying the
+written value. Two consequences for a host:
+
+- It needs a **feedback guard**, because its own write returns to it as device state.
+- A fader drag emits a 640-byte payload per step, so **send coalescing is a bandwidth
+  requirement**, not a nicety.
 
 ### `0x32` — Message
 
@@ -231,7 +250,7 @@ The tool derives the word count as `(length - 8 - 1) / 3`, so it tolerates a sho
 | 2 | 32 | capture routing, 4 blocks x 8 channels |
 | 34 | 32 | output routing, 4 blocks x 8 channels |
 | 66 | 128 | raw mix, 16 mixes x 8 channels |
-| 194 | 256 | macro mix — **skipped by the official tool** (see below) |
+| 194 | 256 | macro mix: `[0..128]` levels by CC, `[128..256]` pans by CC |
 | 450 | 1 | options |
 | 451 | 1 | links, low 16 bits |
 | 452 | 1 | links, high 16 bits |
@@ -245,10 +264,17 @@ Two things to note:
 
 - **The MIDI channel packing changed.** Firmware 1.2 used two separate bytes; 1.3 packs
   both into one word as two 8-bit halves.
-- **The official tool skips the 256 macro-mix words** (`c += 2 * 128`), relying on a
-  separate `0x2A` request instead. So the meaning of those 256 words — whether they are
-  128 levels followed by 128 pans, or 128 interleaved pairs — is **not established by the
-  reference implementation**. See open question Q1.
+- **The macro-mix region is two parallel arrays of 128 indexed by MIDI CC**, not 128
+  interleaved pairs: `[0..128]` are levels, `[128..256]` are pans. The official tool skips
+  these words entirely (`c += 2 * 128`) and issues a separate `0x2A` request instead, so
+  this is measured rather than inherited — words 0 and 9 read 103 while the mix dump
+  independently reported CC 0 and CC 9 at 103, and writing `0x34` CC 0 = 103 then
+  re-reading gives `macro_words[0] == 103`. **The `0x2A` re-request is unnecessary:** the
+  configuration dump alone carries the macro mix.
+
+  The pan half is corroborated only against an all-centre configuration — all 128 words of
+  the high half read exactly 64 — so a host should write it back verbatim until a
+  deliberately asymmetric configuration confirms it the same way.
 
 ### Config upload (`0x09`)
 
@@ -259,8 +285,13 @@ F0 00 21 27 19 09 <chunk 0-23> 00 <32 x 21-bit word> F7
 ```
 
 Each chunk reuses bytes 0–7 of the received dump with byte 5 replaced by `09` and byte 6
-by the chunk index. Chunk length: `8 + 96 + 1` = 105 bytes. There is **no documented
-acknowledgement or flow control** — the tool fires all 24 chunks in a loop.
+by the chunk index. Chunk length: `8 + 96 + 1` = 105 bytes. There is **no acknowledgement
+and no flow control** — the tool fires all 24 chunks in a loop.
+
+**Measured reliable at full speed.** All 24 chunks sent back to back with no pacing
+whatsoever read back byte-identical. A caller must still verify by re-reading, since
+nothing in the protocol would report a partial upload, but the transport itself does not
+need pacing.
 
 ### Mix dump (`0x11`)
 
@@ -269,7 +300,8 @@ F0 00 21 27 19 11 <128 x 3 bytes of raw mix> <128 x macro mix/pan> F7
 ```
 
 Payload: 384 + 256 = **640 bytes**. The macro section is 128 x (level, pan). Pan is read
-back biased by **63**, while `0x34` writes it biased by **64** — see Q2.
+back biased by **63** while `0x34` writes it biased by **64**, because the module stores
+`written - 1`. The two biases compose exactly; see §11.
 
 ### Usage (`0x12`)
 
@@ -412,66 +444,20 @@ deliberate swap. Values `0`, `1` are unused by the UI.
 
 ## 7. Open questions
 
-Most of the original guesses were settled by the manual. What remains:
+What is still genuinely unknown. Everything the manual settled, and everything hardware
+settled, is stated as fact in the body of this document rather than listed here.
 
-**~~Q1 — Macro-mix words in the config dump.~~ RESOLVED on hardware 2026-08-30.** The 256
-words are **two parallel arrays of 128 indexed by MIDI CC**: `[0..128]` levels,
-`[128..256]` pans — not interleaved pairs. Words 0 and 9 read 103 while the mix dump
-independently reported CC 0 and CC 9 at 103, and all 128 words of the high half read
-exactly 64, the pan centre. Confirmed by writing: `0x34` CC 0 = 103 then re-reading the
-dump gives `macro_words[0] == 103`.
-
-The official tool's `0x2A` re-request is therefore unnecessary — the configuration dump
-alone carries the macro mix. Pan values remain written verbatim until a deliberately
-asymmetric pan configuration confirms the high half the same way.
-
-**~~Q2 — Pan bias off-by-one.~~ RESOLVED on hardware 2026-08-30 — and this project's
-first answer was wrong.** Both biases are correct. The module stores `written - 1`, so a
-written centre of 64 is stored as 63 and read back with `- 63`. The earlier conclusion,
-that resting `aux = 64` proved centre was 64, mistook the module's untouched default (one
-step right of centre) for centre itself. See §11 for the measured sweep.
-
-**~~Q3 — Pan row.~~ RESOLVED by the manual, then corrected on hardware 2026-08-30.** Pan
-for a stereo pair `(m, m+1)` is *written* to index `(m+1)*8 + ch` — the CC the
-right-channel mix would have used. But it is not *stored* there: the module keeps it in
-the aux byte of the level cell, `m*8 + ch`. Both halves of the reference tool are right.
-See §11.
-
-**~~Q4 — Config upload acknowledgement.~~ RESOLVED on hardware 2026-08-30.** There is no
-acknowledgement, and none is needed: all 24 chunks were sent back to back with **no pacing
-whatsoever** and the configuration read back byte-identical. A caller still has to verify
-by re-reading, since nothing in the protocol would report a failure, but the transport
-itself is reliable at full speed.
-
-**~~Q5 — Raw vs macro precedence.~~ RESOLVED on hardware 2026-08-30. Macro drives raw.**
-A raw write *does* stick: `0x60+mix` with `0x4000` read back as `0x4000`. But the moment
-the macro layer touches that cell, the raw value is replaced — a `0x34` write to the same
-cell turned it into the raw equivalent of the macro level.
-
-So a raw value is durable only until anything moves the corresponding macro control,
-including a MIDI CC arriving from a controller. Exposing the raw matrix as an ordinary
-control would be misleading, because the value silently will not survive normal use.
-
-**~~Q6 — Echo behaviour.~~ PARTLY RESOLVED on hardware 2026-08-30. The device does talk
-back, and with more than an echo.** A single `0x34` macro write drew an unsolicited
-**full `0x11` mix dump** in reply, carrying the written value.
-
-Two consequences. A host needs a feedback guard, since its own write returns as state.
-And a fader drag emits a large dump per step, so send coalescing is a bandwidth
-requirement rather than a nicety. Whether routing and option changes are echoed the same
-way is still unknown.
-
-**Q7 — Reserved dump words.** Words 719–767 are unused by the tool. Observed all-zero on
+**Q7 — Reserved dump words.** Words 719–767 are unused by the tool and read all-zero on
 hardware, which is consistent with "unused" but does not prove it.
 
 **Q8 — Undocumented commands.** The manual lists a complete command set, so the gaps are
 likely genuinely unused rather than secret. Low priority.
 
-**Q9 — The macro → raw curve is not exactly the documented one.** *(new, 2026-08-30)*
-Since macro drives raw (Q5), the module converts a macro level into a raw gain
-internally. Composing the documented curves — `db_to_raw(macro_to_db(v))` — reproduces
-unity exactly (macro 103 → `0x2000`, matching hardware) but is slightly off elsewhere:
-macro 100 computes 6889 where a real module settled at 6832, about 0.07 dB out.
+**Q9 — The macro → raw curve is not exactly the documented one.** Since macro drives raw,
+the module converts a macro level into a raw gain internally. Composing the documented
+curves — `db_to_raw(macro_to_db(v))` — reproduces unity exactly (macro 103 → `0x2000`,
+matching hardware to the digit) but is slightly off elsewhere: macro 100 computes 6889
+where a real module settled at 6832, about 0.07 dB out.
 
 Nothing depends on this — the module does the real conversion and reports the result, so
 the host never needs to predict it. It matters only for the fidelity of the offline mock,
@@ -479,17 +465,9 @@ and for knowing that the published macro curve is an approximation of what the f
 runs. *Test:* sweep macro 0–127, read the raw matrix at each step, and compare against the
 piecewise table.
 
-### Settled by the manual
-
-| Was | Now |
-|---|---|
-| Two unknown bytes after the dump command | Documented as literal `00 00` |
-| `0x32` inbound "version string" | General **Message**, NUL-terminated, also used for operation feedback |
-| Raw gain "21-bit" | **16-bit**, transmitted in three 7-bit bytes |
-| "Virtual mix" | Official name is **macro mix** |
-| Mixer shape unclear | **8x8 crosspoint** per block; USB block is 16x16; 16 summing buses |
-| Unknown whether more commands exist | Manual gives a complete list — `0x09` upload was the only one missing |
-| Pan addressing (Q3) | `0x34`'s index **is** a MIDI CC number; pan sits at `(m+1)*8+ch` |
+**Q10 — How far the unsolicited-dump behaviour extends.** A `0x34` macro write draws a
+full `0x11` mix dump in reply (§4). Whether routing and option changes are answered the
+same way has not been established.
 
 ## 8. Metering
 
@@ -525,22 +503,17 @@ Recorded so the reimplementation does not inherit them.
 
 - `send()` calls `makeSysEx()`, which is **not defined anywhere** in the file. The "send
   raw SysEx" button throws.
-- ~~Pan round-trip is broken as described above.~~ **RETRACTED 2026-08-30.** This project
-  recorded the tool as buggy here on a reading of its source alone. Hardware says
-  otherwise: pan is written to CC `(m+1)*8 + ch` but the module stores it in the **aux
-  byte of the level cell**, as `written - 1`. So writing `64 + pan` and reading
-  `byte - 63` compose *exactly*, and the tool is right. See §11.
-- ~~Pan bias is inconsistent between send and receive.~~ **RETRACTED** — same reason. The
-  two biases differ by one because the device subtracts one in between, not because
-  either half is wrong.
 - `parseConfigDump` `alert()`s and aborts on any version but `3`, with no fallback — and
   since the `version` field is `3` in **both** the 1.2 and 1.3 dump formats, this check
-  cannot actually detect the format change it appears to guard against.
+  cannot detect the format change it appears to guard against.
 - `updateMixChTag` builds a stereo tag as `tag + "/" + ((cs & 0xe) + 2)`, appending a raw
   number rather than the partner channel's label.
 - The 1.2 tool leaves the trailing NUL on message strings (`slice(6, -1)`); fixed in 1.3.
-- `uploadConfig` (1.3) sends 24 SysEx chunks in a tight loop with no pacing or
-  acknowledgement. Whether this is reliable is untested — see Q4.
+
+**Not a defect: the pan round trip.** The tool writes `64 + pan` and reads back
+`byte - 63`, which looks inconsistent on the page. It is not — the module stores
+`written - 1`, so the two biases compose exactly. Reading the source alone suggests a bug
+here; hardware says the tool is right. See §11.
 
 ## 10. Input DC blocking pairs
 
@@ -583,8 +556,8 @@ input 3, which would silently ruin a CV patched there.
 
 ## 11. Where pan actually lives
 
-Measured on hardware 2026-08-30 (checklist H3), because no document settles it and the
-reference tool's apparent self-contradiction turned out to be the device's behaviour.
+Measured on hardware. No document settles this, and the reference tool's apparent
+self-contradiction is the device's behaviour rather than a bug.
 
 **Pan is written to one address and stored at another.**
 
@@ -608,7 +581,7 @@ have never been touched — that is one step right of centre, not centre.
 
 **The failure this causes if you get it wrong:** reading pan from the value of the CC it
 was written to yields 0 for every strip, which renders as hard left across the whole
-console. That is what this project's own UI did until the behaviour was measured.
+console.
 
 ## Appendix A — Firmware 1.2 config dump (`0x10`)
 

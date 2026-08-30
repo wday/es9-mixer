@@ -25,14 +25,10 @@ pub const DC_OFFSET_MAX: i16 = 3176;
 
 /// The value to **write** for pan centre.
 ///
-/// Pan is written to CC `(m+1)*8 + ch` but is not stored there. Measured on hardware
-/// 2026-08-30 (checklist H3): the module keeps pan in the **aux byte of the level cell**,
-/// and stores `written - 1` (saturating at 0). So writing and reading use biases that
-/// differ by one, and neither is a mistake.
-///
-/// This vindicates the reference configuration tool, which this project had recorded as
-/// buggy here: it writes `64 + pan` and reads `byte - 63`, and those compose exactly
-/// because the device subtracts one in between.
+/// Pan is written to CC `(m+1)*8 + ch` but is not stored there. Measured on hardware: the
+/// module keeps pan in the **aux byte of the level cell** and stores `written - 1`
+/// (saturating at 0). So writing and reading use biases that differ by one, and neither
+/// is a mistake — `64 + pan` out and `byte - 63` back compose exactly.
 pub const PAN_CENTRE: u8 = 64;
 
 /// The **stored** aux byte that means pan centre — one less than [`PAN_CENTRE`].

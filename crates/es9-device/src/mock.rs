@@ -27,7 +27,7 @@ pub struct MockEs9 {
     pub sample_rate: u32,
     /// Whether the module reports state back after the host's own writes.
     ///
-    /// **Measured on hardware 2026-08-30 (Q6): it does.** A `34H` macro write draws an
+    /// **Measured on hardware: it does.** A `34H` macro write draws an
     /// unsolicited full `11H` mix dump carrying the written value, and a raw write is
     /// echoed as `60H+mix`. A client that assumes silence will loop, so this now defaults
     /// to **on** and the quiet case is the one that has to be asked for.
