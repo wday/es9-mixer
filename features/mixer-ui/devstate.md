@@ -150,11 +150,18 @@ single defect.
   carries anything. `view::status` therefore reports what the S/PDIF output is fed from
   and whether any capture channel listens to the input, and the header shows both. Same
   rule as the DC offsets above: the mode is not the routing.
+- **`es9-device::presets` drives the mock, not the hardware.** The desktop app's "restore
+  defaults" sends `26H` and re-reads, so the module applies its *own* defaults; the two
+  presets are only this project's copy of them, used to boot the browser prototype and the
+  offline mock. A change to `presets.rs` therefore changes mock fidelity, not what a real
+  module does.
 - **`presets::hosted()` deliberately deviates from the module's factory default.** USB
   capture 15/16 carry **MIX 1/2** rather than the S/PDIF input, giving the DAW a stereo
   reference recording of exactly what leaves the main outs, sample-aligned with the 14
   multitracks. The cost is that the S/PDIF input no longer reaches the host. This is a
   trade, not an error — do not "correct" it back without knowing which side is wanted.
+  Note the consequence on hardware: **`26H` restores the factory routing**, which puts
+  S/PDIF back on capture 15/16 and removes the reference capture.
 
 ⚠️ **`frontendDist` is baked into the binary at compile time.** Editing `web/` requires
 rebuilding the shell, or you are looking at the previous UI. The symptom — correct data in

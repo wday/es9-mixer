@@ -44,7 +44,25 @@ Metering a point that is not already routed to a USB capture channel means spend
 The app should show that it has done so and let the user decline, rather than quietly
 rewriting the routing to draw a meter.
 
-## 2. Hardware verification still outstanding
+## 2. Next playtest
+
+Unverified on hardware from the most recent work, in the order worth checking.
+
+1. **The header renders as intended.** It should read `Block 3: S/PDIF` followed by a
+   dimmed `out ← USB 5/6 · in not captured` (or `in → capture 15/16`, depending on the
+   routing). Covered by tests through the mock but never seen drawn. Confirm you are on a
+   freshly built shell, not a stale baked-in frontend.
+2. **Set capture 15/16 to MIX 1 / MIX 2** on the Capture tab, then record those two
+   channels in the DAW. That is the stereo reference mix of exactly what leaves the main
+   outs. Check it against the multitracks for level and alignment. Note that the mixer is
+   the main output volume control, so riding those faders during a take is baked into the
+   recording.
+3. **Loading a preset**, still never done against hardware.
+4. **Factory reset**, still never done against hardware — and note it restores the factory
+   routing, which puts S/PDIF back on capture 15/16 and removes the reference capture from
+   step 2.
+
+## 3. Hardware verification still outstanding
 
 Run with `crates/es9-midi/src/bin/probe.rs`, which archives a full dump before anything
 else. Write-side checks sit behind `--write-tests`.
@@ -59,7 +77,7 @@ else. Write-side checks sit behind `--write-tests`.
 
 **Before any config upload testing: save both flash slots and archive a full dump.**
 
-## 3. Live risks
+## 4. Live risks
 
 - **R-3. Firmware format drift.** Already bitten once: 1.2 → 1.3 changed the dump format
   while leaving the version field at 3. Discriminate on the command byte and fail loudly.
