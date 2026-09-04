@@ -463,3 +463,119 @@ fn a_recorded_undo_reverses_something_the_module_did_itself() {
     pump(&mut mock, &mut session.state, undone.messages);
     assert_eq!(session.state.config, before);
 }
+
+/// A drag sends faster than the module answers, so its dumps arrive behind the pointer.
+///
+/// Each `34H` draws a *full* mix dump carrying the value of the step that caused it. Fold
+/// those in verbatim and the fader walks backwards under the hand holding it — which is
+/// exactly what the rig did. The model must hold what the host last wrote until the
+/// module catches up.
+#[test]
+fn a_trailing_mix_dump_does_not_undo_a_newer_write() {
+    let (mut session, mut mock) = connected();
+
+    // Three fader steps sent back to back, keeping every reply the module makes.
+    let mut replies = Vec::new();
+    for value in [40u8, 80, 120] {
+        let applied = session.dispatch(Action::SetMacro { cc: 0, value });
+        for m in applied.messages {
+            replies.extend(mock.receive(&m));
+        }
+    }
+    assert_eq!(
+        session.state.echo.in_flight(),
+        3,
+        "three writes outstanding"
+    );
+    assert_eq!(
+        session.state.macro_values[0], 120,
+        "the model leads the module"
+    );
+
+    // Now the dumps land, oldest first, as they would over the wire.
+    for reply in &replies {
+        session
+            .state
+            .ingest(es9_protocol::decode(reply).expect("decodes"));
+        assert_eq!(
+            session.state.macro_values[0], 120,
+            "a dump behind the pointer must not walk the fader back"
+        );
+    }
+    assert_eq!(session.state.echo.in_flight(), 0, "the guard releases");
+
+    // Released, the module is the authority again: a value the host never wrote — a CC
+    // from a controller, which in this rig is continuous — is taken as the truth.
+    mock.macro_values[0] = 55;
+    session.state.ingest(
+        es9_protocol::decode(&mock.receive(&es9_protocol::encode::request_mix())[0])
+            .expect("decodes"),
+    );
+    assert_eq!(
+        session.state.macro_values[0], 55,
+        "an unpinned cell follows the module"
+    );
+}
+
+/// Pan is written to one CC and stored under another, so the guard has to pin the byte
+/// the view reads rather than the one the value was addressed to.
+#[test]
+fn a_pan_drag_holds_the_aux_byte_it_is_read_from() {
+    let (mut session, mut mock) = connected();
+    // Link mixes 1/2 so channel 1 has a pan at all.
+    let link = session.dispatch(Action::SetLink {
+        family: Family::Mix,
+        even_index: 0,
+        on: true,
+    });
+    pump(&mut mock, &mut session.state, link.messages);
+
+    let pan_cc = session
+        .state
+        .cc_map()
+        .cc_for(0, 0, es9_protocol::ccmap::Control::Pan)
+        .expect("mix 1/2 channel 1 has a pan");
+
+    let mut replies = Vec::new();
+    for value in [70u8, 90, 110] {
+        let applied = session.dispatch(Action::SetMacro { cc: pan_cc, value });
+        for m in applied.messages {
+            replies.extend(mock.receive(&m));
+        }
+    }
+    // The model shows the last written pan immediately, without waiting for a round trip.
+    assert_eq!(
+        session.state.macro_aux[0],
+        es9_protocol::scales::written_to_stored(110),
+        "pan is applied locally, not only when the module answers"
+    );
+    for reply in &replies {
+        session
+            .state
+            .ingest(es9_protocol::decode(reply).expect("decodes"));
+        assert_eq!(
+            session.state.macro_aux[0],
+            es9_protocol::scales::written_to_stored(110),
+            "a trailing dump must not walk the pan back"
+        );
+    }
+}
+
+/// A full configuration read is an explicit resynchronisation. Pinning local values
+/// across one would be holding out against the very thing that settles the disagreement.
+#[test]
+fn a_config_dump_releases_every_pin() {
+    let (mut session, mut mock) = connected();
+    session.dispatch(Action::SetMacro { cc: 0, value: 77 });
+    assert_eq!(session.state.echo.in_flight(), 1);
+    pump(
+        &mut mock,
+        &mut session.state,
+        vec![es9_protocol::encode::request_config()],
+    );
+    assert_eq!(
+        session.state.echo.in_flight(),
+        0,
+        "a config read clears the guard"
+    );
+}

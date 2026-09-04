@@ -163,6 +163,20 @@ impl DeviceState {
             Action::SetMacro { cc, value } => {
                 let previous = self.macro_values[usize::from(cc)];
                 self.macro_values[usize::from(cc)] = value;
+                // Pin the byte the *view* reads, which for a pan is not the one it was
+                // written to: the module keeps pan in the aux of the corresponding level
+                // cell, one less than the value sent. Pinning the pan CC's own cell would
+                // guard a byte nothing looks at while the pan itself still walked
+                // backwards behind the pointer — and updating it here is what gives pan
+                // an optimistic local value at all, rather than waiting on a round trip.
+                match self.cc_map().level_cc_for_pan_cc(cc) {
+                    Some(level_cc) => {
+                        let stored = es9_protocol::scales::written_to_stored(value);
+                        self.macro_aux[usize::from(level_cc)] = stored;
+                        self.echo.wrote_aux(level_cc, stored);
+                    }
+                    None => self.echo.wrote_value(cc, value),
+                }
                 (
                     vec![encode::set_macro(cc, value)],
                     Action::SetMacro {

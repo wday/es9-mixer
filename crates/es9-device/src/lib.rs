@@ -16,4 +16,4 @@ pub mod view;
 pub use action::{Action, Applied, Session};
 pub use mock::MockEs9;
 pub use monitor::{Direction, Entry, Monitor};
-pub use state::{DeviceState, EditTarget};
+pub use state::{DeviceState, EchoGuard, EditTarget};

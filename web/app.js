@@ -36,19 +36,35 @@ const DC_OFFSET_MAX = 3176;
 const pendingSends = new Map();
 let frame = null;
 
-// True while a pointer is held on a control. The background refresh below must not
-// re-render mid-drag: rebuilding the DOM under a moving thumb loses the drag.
+// True while a pointer is held on a control. Nothing may re-render while it is: a render
+// rebuilds the panel, which destroys the very `<input>` the pointer is captured by, and
+// the drag ends there. Releasing reconciles once.
 let interacting = false;
+// Set when a flush skipped its refresh because a drag was in progress.
+let refreshDeferred = false;
+
+function releasePointer() {
+  if (!interacting) return;
+  interacting = false;
+  if (frame !== null) {
+    // The last move of a drag can still be sitting in the coalescing queue. Send it
+    // before reconciling, or the refresh draws the value from before the final move and
+    // the fader appears to fall back a step on release.
+    cancelAnimationFrame(frame);
+    frame = null;
+    flushSends();
+  } else if (refreshDeferred) {
+    refreshDeferred = false;
+    refresh();
+  }
+}
+
 if (typeof window !== 'undefined') {
   window.addEventListener('pointerdown', () => {
     interacting = true;
   });
-  window.addEventListener('pointerup', () => {
-    interacting = false;
-  });
-  window.addEventListener('pointercancel', () => {
-    interacting = false;
-  });
+  window.addEventListener('pointerup', releasePointer);
+  window.addEventListener('pointercancel', releasePointer);
 }
 
 function queueSend(key, fn) {
@@ -61,6 +77,14 @@ async function flushSends() {
   const sends = [...pendingSends.values()];
   pendingSends.clear();
   for (const fn of sends) await fn();
+  // Mid-drag the screen is already right without a refresh: the control holds the value
+  // the pointer put there and its readout follows it locally. Refreshing anyway would
+  // replace the element being dragged, so the reconciliation waits for the release.
+  if (interacting) {
+    refreshDeferred = true;
+    return;
+  }
+  refreshDeferred = false;
   await refresh();
 }
 

@@ -47,6 +47,95 @@ pub struct Identity {
     pub last_message: Option<String>,
 }
 
+/// Tracks the module's echo of the host's own macro writes.
+///
+/// The module answers every `34H` macro write with a **full** `11H` mix dump. Holding a
+/// fader therefore produces a stream of dumps trailing the pointer, each carrying the
+/// value of an earlier step, and folding them in verbatim walks the fader backwards under
+/// the hand holding it. A written byte is pinned to what the host wrote until the module
+/// confirms it by echoing that exact value back.
+///
+/// The pin is bounded by `in_flight`, and it has to be. Anything else that moves a macro
+/// draws a dump too — a CC from a controller, which in this rig is continuous — so a pin
+/// that could only be released by a matching echo would freeze a fader for good the first
+/// time a write went missing. Once no write is outstanding the module is the authority
+/// again, whatever moved it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EchoGuard {
+    value: Box<[Option<u8>; 128]>,
+    aux: Box<[Option<u8>; 128]>,
+    in_flight: u32,
+}
+
+impl Default for EchoGuard {
+    fn default() -> Self {
+        Self {
+            value: Box::new([None; 128]),
+            aux: Box::new([None; 128]),
+            in_flight: 0,
+        }
+    }
+}
+
+impl EchoGuard {
+    /// Writes still unaccounted for by an inbound dump.
+    ///
+    /// Exposed so a test can assert that the guard *releases*, rather than inferring it
+    /// from values that would look the same either way.
+    pub fn in_flight(&self) -> u32 {
+        self.in_flight
+    }
+
+    /// Records a host write to a macro value cell, and the dump it will draw.
+    pub(crate) fn wrote_value(&mut self, cc: u8, value: u8) {
+        self.value[usize::from(cc)] = Some(value);
+        self.in_flight = self.in_flight.saturating_add(1);
+    }
+
+    /// Records a host write to a macro aux cell — where pan is stored — and its dump.
+    pub(crate) fn wrote_aux(&mut self, cc: u8, stored: u8) {
+        self.aux[usize::from(cc)] = Some(stored);
+        self.in_flight = self.in_flight.saturating_add(1);
+    }
+
+    /// Accounts for one inbound dump. Returns whether writes are still outstanding, in
+    /// which case this dump may be trailing them.
+    pub(crate) fn dump(&mut self) -> bool {
+        self.in_flight = self.in_flight.saturating_sub(1);
+        self.in_flight > 0
+    }
+
+    /// Drops every pin. A full configuration read is an explicit resynchronisation, and
+    /// holding local values across one would be pinning against the thing that resolves
+    /// the disagreement.
+    pub(crate) fn reset(&mut self) {
+        self.value.fill(None);
+        self.aux.fill(None);
+        self.in_flight = 0;
+    }
+
+    pub(crate) fn settle_value(&mut self, i: usize, held: &mut u8, incoming: u8, trailing: bool) {
+        settle(&mut self.value[i], held, incoming, trailing);
+    }
+
+    pub(crate) fn settle_aux(&mut self, i: usize, held: &mut u8, incoming: u8, trailing: bool) {
+        settle(&mut self.aux[i], held, incoming, trailing);
+    }
+}
+
+/// Folds one byte of an inbound dump into the model, honouring a pending host write.
+///
+/// The echo of the host's own write is its acknowledgement: seeing that exact value come
+/// back releases the pin. A dump that disagrees is held off only while writes are still
+/// outstanding, because that is the only situation in which it can be stale.
+fn settle(expect: &mut Option<u8>, held: &mut u8, incoming: u8, trailing: bool) {
+    if trailing && matches!(*expect, Some(e) if e != incoming) {
+        return;
+    }
+    *expect = None;
+    *held = incoming;
+}
+
 /// Everything known about the connected module.
 #[derive(Debug, Clone, PartialEq)]
 pub struct DeviceState {
@@ -65,6 +154,12 @@ pub struct DeviceState {
     pub editing: EditTarget,
     /// Whether the configuration has changed since it was last loaded or saved.
     pub dirty: bool,
+    /// Bookkeeping for the module's echo of the host's own writes.
+    ///
+    /// Maintained by [`DeviceState::apply`] and [`DeviceState::ingest`] together, which
+    /// is the only pair that knows both what was written and what came back. Nothing
+    /// else should touch it.
+    pub echo: EchoGuard,
 }
 
 impl Default for DeviceState {
@@ -76,6 +171,7 @@ impl Default for DeviceState {
             identity: Identity::default(),
             editing: EditTarget::default(),
             dirty: false,
+            echo: EchoGuard::default(),
         }
     }
 }
@@ -95,8 +191,15 @@ impl DeviceState {
             Incoming::Config(c) => {
                 self.config = *c;
                 self.dirty = false;
+                self.echo.reset();
             }
             Incoming::Mix(m) => {
+                // One dump per macro write, so this accounts for at most one of them.
+                let trailing = self.echo.dump();
+                // The raw matrix is not pinned. It is read-only in the UI, and the host
+                // never writes the raw value a macro write produces — the module derives
+                // it — so there is no expected value to acknowledge. A trailing dump
+                // therefore walks the raw readout backwards for as long as a drag lasts.
                 for mix in 0..16 {
                     for ch in 0..8 {
                         self.config.raw_mix[mix][ch] = m.raw[mix][ch];
@@ -104,8 +207,10 @@ impl DeviceState {
                 }
                 for (i, cell) in m.macro_cells.iter().enumerate() {
                     let MacroCell { value, aux } = *cell;
-                    self.macro_values[i] = value;
-                    self.macro_aux[i] = aux;
+                    self.echo
+                        .settle_value(i, &mut self.macro_values[i], value, trailing);
+                    self.echo
+                        .settle_aux(i, &mut self.macro_aux[i], aux, trailing);
                 }
             }
             Incoming::Usage(u) => self.identity.usage = Some(u),

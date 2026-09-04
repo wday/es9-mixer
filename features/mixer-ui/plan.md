@@ -44,6 +44,15 @@ choice is to accept one (a `package.json`, `node_modules`, and the harness moved
 `web/`) or to leave the bay covered only by looking at it. `scripts/smoke.sh` is
 unaffected either way: it drives the WASM bridge and never touches the DOM.
 
+### Mixer console: render in place
+
+Every refresh rebuilds the whole console with `innerHTML = ''`, so keyboard focus on a
+fader is lost every second to the background poll, and a drag would be lost too if
+refreshes were not now deferred until the pointer comes up. Deferring is the right fix for
+the drag; it is a workaround for the rebuild. Updating the existing strips in place —
+values, readouts, meters — removes the class rather than the instance, and lets the
+console stay live during a drag instead of frozen.
+
 ### MIDI channel assignment (R29)
 
 `Action::SetMidiChannels` and `encode::set_midi_channels` exist; there is no UI. This
@@ -83,25 +92,34 @@ rewriting the routing to draw a meter.
 
 Unverified on hardware from the most recent work, in the order worth checking.
 
-1. **The routing patchbay, at a real window size.** It has never been drawn in a browser.
+1. **Fader drags, on the rig.** This is the thing that was wrong: a drag used to back up
+   behind the pointer and a click stuck where a slide did not. Both halves are fixed —
+   the model no longer lets a trailing mix dump undo a newer write, and nothing re-renders
+   while the pointer is down — but neither has been felt on hardware, where the round trip
+   is real. Drag a fader hard and fast, end to end, and check it tracks the pointer and
+   settles on the value released at. Then do the same to a **pan**, which had no
+   optimistic local update at all and moved only when the module answered. Both fixes are
+   covered by tests through the mock, and the mock does reproduce the echo and the pan
+   storage quirk, but it has no latency.
+2. **The routing patchbay, at a real window size.** It has never been drawn in a browser.
    Check that both bays fit the window without horizontal scroll (the jack pitch floors at
    22px and the bay scrolls below that), that thirty-two cables in one gap are followable,
    and that pointing at a jack dims the rest enough to trace a single run. Then patch
    something and confirm the module follows: click a source, click a capture channel, and
    watch the `40H`/`50H` write in the Monitor tab.
-2. **The header renders as intended.** It should read `Block 3: S/PDIF` followed by a
+3. **The header renders as intended.** It should read `Block 3: S/PDIF` followed by a
    dimmed `out ← USB 5/6 · in not captured` (or `in → capture 15/16`, depending on the
    routing). Covered by tests through the mock but never seen drawn. Confirm you are on a
    freshly built shell, not a stale baked-in frontend.
-3. **Set capture 15/16 to MIX 1 / MIX 2** in the capture bay, then record those two
+4. **Set capture 15/16 to MIX 1 / MIX 2** in the capture bay, then record those two
    channels in the DAW. That is the stereo reference mix of exactly what leaves the main
    outs. Check it against the multitracks for level and alignment. Note that the mixer is
    the main output volume control, so riding those faders during a take is baked into the
    recording.
-4. **Loading a preset**, still never done against hardware.
-5. **Factory reset**, still never done against hardware — and note it restores the factory
+5. **Loading a preset**, still never done against hardware.
+6. **Factory reset**, still never done against hardware — and note it restores the factory
    routing, which puts S/PDIF back on capture 15/16 and removes the reference capture from
-   step 3.
+   step 4.
 
 ## 3. Hardware verification still outstanding
 

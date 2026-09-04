@@ -19,7 +19,7 @@ if you need the archaeology; do not reconstruct it here.
 | `es9-wasm` | Browser bridge driving the mock. | MIT |
 | `web/` | One frontend; picks Tauri `invoke` or the WASM mock at load time. | — |
 
-106 tests, clippy and rustfmt clean, `./scripts/smoke.sh` passing.
+112 tests, clippy and rustfmt clean, `./scripts/smoke.sh` passing.
 
 The shell runs on the rig: it connects over MIDI, shows the module's real configuration,
 and meters sixteen channels at 48 kHz over ASIO. It is installed via
@@ -170,6 +170,26 @@ single defect.
 - **Mixer strips are derived from the resolved CC map, not from the configuration**, so
   every fader carries the CC the hardware will honour and the stereo rules are applied in
   exactly one place.
+- **The module's echo of the host's own writes is guarded, and the guard is bounded.**
+  Every `34H` macro write draws a *full* `11H` mix dump, so a fader drag produces a stream
+  of dumps trailing the pointer, each carrying the value of an earlier step. Folding them
+  in verbatim walks the fader backwards under the hand holding it. `state::EchoGuard` pins
+  a written byte to what the host wrote until the module echoes that exact value back —
+  and releases the pin as soon as no write is outstanding, because a CC from a controller
+  draws a dump too and a pin that only a matching echo could clear would freeze a fader
+  the first time a write went missing. A full config read clears every pin.
+- **The guard pins the byte the *view* reads, not the one the value was addressed to.**
+  For pan those differ: it is written to the pan CC and stored in the aux of the
+  corresponding level cell. `apply` therefore writes that aux byte itself, which is also
+  what gives pan an optimistic local value instead of one that waits on a round trip.
+  The raw matrix is deliberately **not** pinned — the host never writes the raw value a
+  macro write produces, so there is no expected value to acknowledge, and the read-only
+  raw readout does walk backwards for the length of a drag.
+- **Nothing re-renders while a pointer is down.** A render rebuilds the panel, which
+  destroys the very `<input>` the pointer is captured by and ends the drag — the reason a
+  click on a fader used to stick when a drag did not. `flushSends` still sends every
+  coalesced frame but defers its refresh, and the release flushes any last queued move
+  before reconciling once.
 - **`Applied.cc_changes` is attached to every action.** A stereo link toggle reports its
   sixteen rewritten CCs automatically, wherever it was triggered from.
 - **`es9-app` is deliberately not a workspace member.** Tauri pulls GTK and dbus, which
