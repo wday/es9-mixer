@@ -80,7 +80,8 @@ that answers — the module is published under a generic jack name, so it cannot
 name. Audio opens independently, so meters work even if MIDI does not, and vice versa.
 
 > **Editing `web/` requires rebuilding the shell.** Tauri bakes the frontend into the
-> binary at compile time, so re-running an old executable shows the old UI.
+> binary at compile time, so re-running an old executable shows the old UI. The build
+> script watches `web/`, so a rebuild is enough — but it has to be a rebuild.
 
 ## Hardware probes (Windows)
 

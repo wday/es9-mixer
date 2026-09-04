@@ -235,7 +235,13 @@ single defect.
 
 ⚠️ **`frontendDist` is baked into the binary at compile time.** Editing `web/` requires
 rebuilding the shell, or you are looking at the previous UI. The symptom — correct data in
-the backend log, stale data on screen — looks exactly like a state bug.
+the backend log, stale data on screen — looks exactly like a state bug. A rebuild is now
+enough to pick it up: `crates/es9-app/build.rs` watches the directory itself, because the
+`rerun-if-changed` that would do it lives in `tauri-build`'s `codegen` feature and this
+crate does not enable it. Without that, cargo saw no reason to recompile a crate whose
+Rust had not changed, `tauri::generate_context!()` never re-expanded, and a *freshly
+built* binary served the old UI. `build.rs` asserts the watched path is a real directory,
+so it cannot drift from `tauri.conf.json` and reintroduce the trap silently.
 
 ⚠️ **Nothing touching hardware can be tested from the Linux side.** WSL2 has no sound
 subsystem and no USB passthrough. Windows `cargo` builds directly from the `\\wsl$` path,
