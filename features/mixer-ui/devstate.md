@@ -25,8 +25,42 @@ The shell runs on the rig: it connects over MIDI, shows the module's real config
 and meters sixteen channels at 48 kHz over ASIO. It is installed via
 `scripts/win-install.ps1` and launched from the Start Menu.
 
-Tabs: **Mixer**, **Capture**, **Outputs**, **Analogue**, **Meters**, **CC Map**
-(carrying the stereo links, because a link rewrites the map it sits above), **Monitor**.
+Tabs: **Mixer**, **Routing**, **Analogue**, **Meters**, **CC Map** (carrying the stereo
+links, because a link rewrites the map it sits above), **Presets**, **Monitor**.
+
+### The routing patchbay
+
+Routing is drawn by `web/patchbay.js` as two bays on one tab, in signal order: sources
+into capture channels, then block outputs into destinations. Each bay is a row of jacks
+above a row of jacks with SVG cables strung between them. Click a jack, click one on the
+far row, and the connection is written; Escape abandons a half-made patch.
+
+The shape is chosen to carry facts a grid of cells cannot:
+
+- **A jack holds one plug.** Every capture channel has exactly one source and every block
+  output exactly one destination, so repatching visibly *moves* a plug. In a grid that
+  rule is invisible and has to be written underneath in prose.
+- **Both rows share one pitch and start at the same offset**, so Input 3 sits directly
+  above USB in 3 and a straight-through patch is a vertical cable. Deviation from the
+  obvious routing is then a visible diagonal. This is why family gaps are drawn as
+  labelled bands above and below the rows rather than as gaps in the rows: a gap would
+  break that alignment, because the source families (14/16/16/8/2) and the channel blocks
+  (8/8/8/8) do not divide at the same places.
+- **A jack carrying more than one cable is ringed.** On the source row that is fan-out;
+  on the destination row it is the module summing, which is how both mixer banks reach
+  the main outs and is easy to create by accident.
+- **A plug takes its cable's colour, not its jack's.** On the channel row those differ,
+  and the arriving signal is the thing worth naming. Where families sum onto one
+  destination no single colour is true, so that plug goes neutral.
+- **Colour is per signal family**, shared by cable, plug and band, so a signal looks the
+  same wherever it is drawn.
+
+With thirty-two cables in a bay, legibility comes from what is dimmed: pointing at any
+jack or cable drops the rest back far enough to follow one run, and arming a jack lifts
+only the far row, which is the only place a patch can land.
+
+An unrecognised routing byte has no jack to land on, so it is drawn as a dashed stub off
+its channel rather than dropped — the value is real and round-trips.
 
 ## Measured against hardware
 
@@ -170,6 +204,15 @@ single defect.
   S/PDIF back on capture 15/16 and removing any reference capture set up there. The
   Presets tab says so.
 
+- **The patchbay never invents a jack.** Its rows come from `view::available_sources` /
+  `available_destinations` and its cables from the wire bytes in `view::routing`. A wire
+  value with no matching jack is drawn as a stub, never silently omitted — the same reason
+  routing is stored as wire bytes rather than decoded enums.
+- **Both rows of a bay share one jack pitch and one origin.** The vertical alignment
+  between Input *n* and USB in *n* is the affordance that makes a non-obvious routing
+  visible as a diagonal. Adding a gap between families in either row destroys it; the
+  labelled bands exist precisely so no gap is needed.
+
 ⚠️ **`frontendDist` is baked into the binary at compile time.** Editing `web/` requires
 rebuilding the shell, or you are looking at the previous UI. The symptom — correct data in
 the backend log, stale data on screen — looks exactly like a state bug.
@@ -197,3 +240,10 @@ Stated as gaps rather than assumptions, so nothing downstream treats them as est
   `09H` upload transport they rely on is verified, but the buttons themselves are untried
   on the module.
 - **Whether routing and option changes are echoed** the way macro writes are.
+- **The patchbay has never been seen in a browser.** Its geometry, hit testing and write
+  path are exercised headlessly against the mock — jack and cable counts, the family
+  bands, patching from either end, the no-op when a connection already exists — but that
+  harness is jsdom, which has no layout engine, and it lives outside the repo because the
+  project otherwise has no npm dependency. Nothing has confirmed how the bay *looks* at a
+  real window size, how a thirty-two-cable bay reads in motion, or that the hover dimming
+  does the work it is relied on to do.

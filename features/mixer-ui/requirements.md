@@ -148,11 +148,18 @@ The specific things "more intuitive" is measured against.
 - R13. Show capture and output assignment for all four blocks.
 - R14. Present the ES-9's permuted input ordering in natural order (Input 1..14), hiding
   `INPUT_CAPTURE_LOOKUP` from the user.
-- R15. Routing is presented as a patchbay matrix: sources as rows, destinations as
-  columns, grouped by source family. The underlying model is *not* a free matrix — each
-  capture and output channel takes exactly one assignment, so each column has at most one
-  active cell and clicking **moves** an assignment rather than adding one. That constraint
-  must be visible in the interaction, not merely enforced.
+- R15. Routing is presented as a **patchbay**: two rows of jacks with cables strung
+  between them, not a grid of cells. The model is not a free matrix — each capture channel
+  takes exactly one source and each block output exactly one destination, while the other
+  side of every connection fans out or sums. A grid states none of that and needs the rule
+  written underneath it in prose; a jack holds one plug, so repatching visibly **moves**
+  it. The constraint must be carried by the interaction, not merely enforced by it.
+- R15a. A jack carrying more than one cable is marked. On the source side that is one
+  signal feeding several channels; on the destination side it is the module **summing**
+  them, which is how both mixer banks reach the main outs and is easy to create by
+  accident. Neither is visible in a grid without counting cells.
+- R15b. Both bays live on one tab, in signal order — what the module captures, then where
+  it sends.
 
 ### 6.4 Labels and state
 

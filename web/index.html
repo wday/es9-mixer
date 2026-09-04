@@ -21,8 +21,7 @@
 
 <nav class="tabs" id="tabs">
   <button data-tab="mixer" class="on">Mixer</button>
-  <button data-tab="capture">Capture</button>
-  <button data-tab="outputs">Outputs</button>
+  <button data-tab="routing">Routing</button>
   <button data-tab="analogue">Analogue</button>
   <button data-tab="meters" id="tab-meters" hidden>Meters</button>
   <button data-tab="presets">Presets</button>
@@ -38,20 +37,28 @@
     <div class="console" id="console"></div>
   </section>
 
-  <section id="panel-capture" class="panel" hidden>
-    <div class="routing-head">
-      <h2>Capture &mdash; what each channel listens to</h2>
-      <p class="hint">Each column takes exactly one source, so clicking a cell <em>moves</em> the assignment rather than adding one.</p>
+  <section id="panel-routing" class="panel" hidden>
+    <div class="bayblock">
+      <div class="bayhead">
+        <h2>Capture</h2>
+        <p class="hint">
+          What the module sends to the computer and into the two mixers. Click a jack,
+          then click one on the far row to patch.
+        </p>
+      </div>
+      <div class="baybody" id="bay-capture"></div>
     </div>
-    <div class="matrix-wrap" id="matrix-capture"></div>
-  </section>
 
-  <section id="panel-outputs" class="panel" hidden>
-    <div class="routing-head">
-      <h2>Outputs &mdash; where each channel is sent</h2>
-      <p class="hint">Each column takes exactly one destination, so clicking a cell <em>moves</em> the assignment.</p>
+    <div class="bayblock">
+      <div class="bayhead">
+        <h2>Output</h2>
+        <p class="hint">
+          Where each USB playback channel and each mix is sent. Several may share a
+          destination &mdash; the module sums them there.
+        </p>
+      </div>
+      <div class="baybody" id="bay-outputs"></div>
     </div>
-    <div class="matrix-wrap" id="matrix-outputs"></div>
   </section>
 
   <section id="panel-analogue" class="panel" hidden>

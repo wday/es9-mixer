@@ -9,6 +9,41 @@ Derived from `requirements.md` and `../../docs/es9-sysex-protocol.md`.
 
 Ordered by how much each is worth on the rig, not by phase.
 
+### Patchbay: the elaborate pass
+
+The bay is deliberately plain for a first iteration — flat rails, flat cables, flat jacks
+— but every part of it is SVG built from a layout model, so the elaboration is decoration
+over a structure that already exists rather than a rewrite. In rough order of how much
+each adds per unit of work:
+
+- **Cables that read as cables.** A highlight along the top of each core, a soft shadow
+  cast on the panel behind, and a plug body at each end rather than a filled circle.
+- **A panel that reads as hardware.** Brushed vertical gradient on the rails, screws at
+  the ends, engraved rather than painted family bands, a bevel on each bezel.
+- **Drag to patch**, alongside the click-click that is there now. The gesture is what a
+  patchbay invites, and grabbing a plug and moving it says "one plug per jack" more
+  plainly than any highlight does. Click-click stays: it is the keyboard-reachable path.
+- **Cable routing that avoids collisions.** Thirty-two cables through one gap currently
+  overlap wherever their spans do. Fanning the departure angle by index, or nudging the
+  belly depth per cable, separates them without changing what any cable means.
+- **Motion.** A new cable settling into its hang, and the dimming easing rather than
+  snapping.
+
+Two things worth deciding before the elaborate pass rather than during it: whether the
+bay stays a flat front elevation or gains perspective, and whether cable colour keeps
+meaning signal family once cables look real enough that colour reads as a physical cable
+the user chose.
+
+### Patchbay: automated coverage
+
+`web/patchbay.js` has none in the repo. Its geometry, hit testing and write path were
+exercised headlessly against the mock during development — jack and cable counts, the
+family bands, patching from either end, the no-op when a connection already exists — but
+that harness needs `jsdom`, and the project has no npm dependency at all today. The
+choice is to accept one (a `package.json`, `node_modules`, and the harness moved into
+`web/`) or to leave the bay covered only by looking at it. `scripts/smoke.sh` is
+unaffected either way: it drives the WASM bridge and never touches the DOM.
+
 ### MIDI channel assignment (R29)
 
 `Action::SetMidiChannels` and `encode::set_midi_channels` exist; there is no UI. This
@@ -48,19 +83,25 @@ rewriting the routing to draw a meter.
 
 Unverified on hardware from the most recent work, in the order worth checking.
 
-1. **The header renders as intended.** It should read `Block 3: S/PDIF` followed by a
+1. **The routing patchbay, at a real window size.** It has never been drawn in a browser.
+   Check that both bays fit the window without horizontal scroll (the jack pitch floors at
+   22px and the bay scrolls below that), that thirty-two cables in one gap are followable,
+   and that pointing at a jack dims the rest enough to trace a single run. Then patch
+   something and confirm the module follows: click a source, click a capture channel, and
+   watch the `40H`/`50H` write in the Monitor tab.
+2. **The header renders as intended.** It should read `Block 3: S/PDIF` followed by a
    dimmed `out ← USB 5/6 · in not captured` (or `in → capture 15/16`, depending on the
    routing). Covered by tests through the mock but never seen drawn. Confirm you are on a
    freshly built shell, not a stale baked-in frontend.
-2. **Set capture 15/16 to MIX 1 / MIX 2** on the Capture tab, then record those two
+3. **Set capture 15/16 to MIX 1 / MIX 2** in the capture bay, then record those two
    channels in the DAW. That is the stereo reference mix of exactly what leaves the main
    outs. Check it against the multitracks for level and alignment. Note that the mixer is
    the main output volume control, so riding those faders during a take is baked into the
    recording.
-3. **Loading a preset**, still never done against hardware.
-4. **Factory reset**, still never done against hardware — and note it restores the factory
+4. **Loading a preset**, still never done against hardware.
+5. **Factory reset**, still never done against hardware — and note it restores the factory
    routing, which puts S/PDIF back on capture 15/16 and removes the reference capture from
-   step 2.
+   step 3.
 
 ## 3. Hardware verification still outstanding
 

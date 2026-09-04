@@ -20,9 +20,10 @@ so the meters keep working with Ableton open on the same module. WASAPI is rejec
 for latency but because shared mode re-clocks the module to whatever rate Windows has
 configured for the endpoint.
 
-Tabs: **Mixer**, **Capture** and **Outputs** (one routing matrix each), **Analogue** (input
-DC blocking and output DC offsets), **Meters**, **Presets**, **CC Map** (with the stereo
-links that rewrite it), and **Monitor**.
+Tabs: **Mixer**, **Routing** (two patchbays — sources into capture channels, then block
+outputs into destinations, with cables you patch by clicking a jack at each end),
+**Analogue** (input DC blocking and output DC offsets), **Meters**, **Presets**, **CC
+Map** (with the stereo links that rewrite it), and **Monitor**.
 
 Targets **firmware 1.3.x**. Firmware 1.2 used a different configuration dump format and is
 detected and rejected rather than misparsed.

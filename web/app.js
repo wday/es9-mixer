@@ -5,6 +5,7 @@
 // the desktop one crosses a process boundary.
 
 import { createBackend } from './backend.js';
+import { renderBay, clearArmed } from './patchbay.js';
 
 let bridge;
 let snap;
@@ -309,88 +310,103 @@ const formatDb = (db) => (db > 0 ? '+' : '') + db.toFixed(1);
 const formatPan = (p) => (p === 0 ? 'C' : p < 0 ? `${-p}L` : `${p}R`);
 
 // ---------------------------------------------------------------- routing
+//
+// Two patchbays on one tab, in signal order: what the module captures, then where it
+// sends. Both bays are drawn by `patchbay.js`; everything here is the mapping from the
+// snapshot's flat channel lists onto rows of labelled jacks.
 
-function renderMatrix(hostId, channels, choices, apply) {
-  const host = $(hostId);
-  host.innerHTML = '';
-  const table = document.createElement('table');
-  table.className = 'matrix';
+// The four routing blocks are eight channels each, but they are not eight *numbered*
+// channels each: the two USB blocks are halves of one sixteen-channel run, so the jack a
+// user is looking for is "USB in 11", not "block 1, channel 3". The block index is an
+// implementation detail of the wire format and stays out of the bay.
+const CAPTURE_BLOCKS = [
+  { group: 'USB in', base: 1 },
+  { group: 'USB in', base: 9 },
+  { group: 'Mixer 1 in', base: 1 },
+  { group: 'Mixer 2 in', base: 1 },
+];
+const OUTPUT_BLOCKS = [
+  { group: 'USB out', base: 1 },
+  { group: 'USB out', base: 9 },
+  { group: 'MIX', base: 1 },
+  { group: 'MIX', base: 9 },
+];
 
-  const thead = document.createElement('thead');
-  const hr = document.createElement('tr');
-  hr.append(el('th', 'corner', ''));
-  channels.forEach((c, i) => {
-    const th = el('th', i % 8 === 7 ? 'blockgap' : '', String(c.channel + 1));
-    th.title = `Block ${c.block}, channel ${c.channel + 1}`;
-    hr.append(th);
+function channelJacks(channels, blocks, arrow) {
+  return channels.map((c) => {
+    const b = blocks[c.block];
+    const short = String(b.base + c.channel);
+    return {
+      ...c,
+      group: b.group,
+      short,
+      tip: `${b.group} ${short} ${arrow} ${c.label}`,
+    };
   });
-  thead.append(hr);
-
-  const blockRow = document.createElement('tr');
-  blockRow.append(el('th', 'corner', ''));
-  for (let b = 0; b < 4; b++) {
-    const th = el('th', 'blockgap', blockName(b, hostId));
-    th.colSpan = 8;
-    blockRow.append(th);
-  }
-  thead.append(blockRow);
-
-  const tbody = document.createElement('tbody');
-  let lastGroup = null;
-  for (const choice of choices) {
-    const group = choice.label.replace(/\s*\d+.*$/, '') || choice.label;
-    if (group !== lastGroup) {
-      lastGroup = group;
-      const gr = document.createElement('tr');
-      gr.className = 'group';
-      const th = el('th', 'rowhead', group);
-      th.colSpan = channels.length + 1;
-      gr.append(th);
-      tbody.append(gr);
-    }
-    const tr = document.createElement('tr');
-    tr.append(el('th', 'rowhead', choice.label));
-    channels.forEach((c, i) => {
-      const td = el('td', 'cell' + (i % 8 === 7 ? ' blockgap' : ''), '');
-      if (c.wire === choice.wire) td.classList.add('on');
-      td.title = `${choice.label} → block ${c.block} channel ${c.channel + 1}`;
-      td.onclick = async () => {
-        await apply(c.block, c.channel, choice.wire);
-        await refresh();
-      };
-      tr.append(td);
-    });
-    tbody.append(tr);
-  }
-  table.append(thead, tbody);
-  host.append(table);
 }
 
-function blockName(b, hostId) {
-  const capture = hostId === 'matrix-capture';
-  if (b === 0) return capture ? 'USB in 1-8' : 'USB out 1-8';
-  if (b === 1) return capture ? 'USB in 9-16' : 'USB out 9-16';
-  if (b === 2) return capture ? 'Mixer 1 inputs' : 'Mixes 1-8';
-  return capture ? 'Mixer 2 inputs' : 'Mixes 9-16';
+// Mixer 2 is an option, and when it is off its eight mixer inputs and its mixes 9-16 are
+// not running. The routing bytes are still real and still round-trip, so the jacks stay
+// live and patchable -- they are only drawn back, so the bay does not present a block
+// that is doing nothing as though it were carrying signal.
+const mixer2Off = (it) => it.block === 3 && !snap.status.mixer2;
+
+// The bays are rebuilt from scratch, and the background poll fires once a second on a
+// view that almost never changes. Redrawing eighty-eight jacks and thirty-two cables into
+// an identical picture costs nothing useful and visibly flickers, so a signature of
+// everything the drawing depends on gates it.
+let baySignature = null;
+function invalidateBays() {
+  baySignature = null;
 }
 
-function el(tag, cls, text) {
-  const e = document.createElement(tag);
-  if (cls) e.className = cls;
-  if (text) e.textContent = text;
-  return e;
-}
+function renderRouting() {
+  const host = $('bay-capture');
+  const sig = JSON.stringify([
+    snap.routing.capture.map((c) => c.wire),
+    snap.routing.outputs.map((c) => c.wire),
+    snap.status.mixer2,
+    host.clientWidth,
+    host.clientHeight,
+  ]);
+  if (sig === baySignature) return;
+  baySignature = sig;
 
-function renderCapture() {
-  renderMatrix('matrix-capture', snap.routing.capture, snap.sources, (b, c, w) =>
-    bridge.setCapture(b, c, w),
-  );
-}
+  renderBay(host, {
+    id: 'capture',
+    channelSide: 'bottom',
+    top: { title: 'Sources', items: snap.sources },
+    bottom: {
+      title: 'Capture channels',
+      items: channelJacks(snap.routing.capture, CAPTURE_BLOCKS, '←'),
+    },
+    idle:
+      'Each capture channel takes exactly one source, so landing a cable on one moves ' +
+      'its plug. A source can feed as many channels as you like.',
+    inert: mixer2Off,
+    apply: async (chan, wire) => {
+      await bridge.setCapture(chan.block, chan.channel, wire);
+      await refresh();
+    },
+  });
 
-function renderOutputs() {
-  renderMatrix('matrix-outputs', snap.routing.outputs, snap.destinations, (b, c, w) =>
-    bridge.setOutput(b, c, w),
-  );
+  renderBay($('bay-outputs'), {
+    id: 'outputs',
+    channelSide: 'top',
+    top: {
+      title: 'Output channels',
+      items: channelJacks(snap.routing.outputs, OUTPUT_BLOCKS, '→'),
+    },
+    bottom: { title: 'Destinations', items: snap.destinations },
+    idle:
+      'Each output channel goes to exactly one destination. Several may land on the ' +
+      'same one, and the module sums them there.',
+    inert: mixer2Off,
+    apply: async (chan, wire) => {
+      await bridge.setOutput(chan.block, chan.channel, wire);
+      await refresh();
+    },
+  });
 }
 
 // ---------------------------------------------------------------- output dc offsets
@@ -741,10 +757,8 @@ function render() {
   if (tab === 'mixer') {
     renderMixList();
     renderConsole();
-  } else if (tab === 'capture') {
-    renderCapture();
-  } else if (tab === 'outputs') {
-    renderOutputs();
+  } else if (tab === 'routing') {
+    renderRouting();
   } else if (tab === 'analogue') {
     renderDcFilters();
     renderDcOffsets();
@@ -763,10 +777,11 @@ function render() {
 async function selectTab(next) {
   tab = next;
   for (const b of $('tabs').children) b.classList.toggle('on', b.dataset.tab === next);
+  // Arming a jack in one bay and then leaving the tab would otherwise come back armed.
+  if (next !== 'routing') clearArmed();
   for (const name of [
     'mixer',
-    'capture',
-    'outputs',
+    'routing',
     'analogue',
     'meters',
     'presets',
@@ -786,6 +801,21 @@ async function main() {
   $('tabs').onclick = (e) => {
     if (e.target.dataset.tab) selectTab(e.target.dataset.tab);
   };
+  // Escape abandons a half-made patch. It is the only way out that does not require
+  // finding the armed jack again, and a stray click elsewhere would otherwise land it.
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || tab !== 'routing') return;
+    clearArmed();
+    invalidateBays();
+    render();
+  });
+  // Jack pitch and cable slack are both computed from the available box, so a resize is
+  // a re-layout rather than something CSS can absorb.
+  window.addEventListener('resize', () => {
+    if (tab !== 'routing') return;
+    invalidateBays();
+    render();
+  });
   $('undo').onclick = async () => {
     await bridge.undo();
     await refresh();

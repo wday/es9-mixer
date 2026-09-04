@@ -39,7 +39,7 @@
 
 /* The window is the scroll container, not the page. Each panel fills what is left below
    the header and tabs, and scrolls its own content exactly once. Without this the page
-   scrolls *and* the matrix scrolls, and a matrix cell can only be reached by driving two
+   scrolls *and* the panel scrolls, and a control can only be reached by driving two
    scrollbars against each other. */
 html, body { height: 100%; }
 body {
@@ -150,22 +150,100 @@ details.raw .caveat { font-size: 10px; color: var(--warn-ink); background: var(-
 .routing-head h2 { margin: 0; font-size: 15px; }
 .hint { margin: 0; color: var(--muted); font-size: 12.5px; }
 
-/* The single scrolling region on a routing tab. It takes the leftover height rather than
-   a fixed fraction of the viewport, so there is nothing to scroll around it. */
-.matrix-wrap { flex: 1; min-height: 0; overflow: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); }
-table.matrix { border-collapse: separate; border-spacing: 0; font-size: 11.5px; }
-table.matrix th, table.matrix td { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 0; }
-table.matrix th.rowhead {
-  position: sticky; left: 0; z-index: 2; background: var(--panel);
-  text-align: left; padding: 2px 9px; white-space: nowrap; font-weight: 450; min-width: 92px;
+/* ---------------------------------------------------------------- patchbay
+
+   Two bays share the routing tab and split its height between them. Jack pitch and cable
+   slack are both computed in JS from the box this gives them, so the only thing CSS owns
+   here is the box, the palette, and the focus states. */
+#panel-routing { gap: 4px; overflow: auto; }
+.bayblock { display: flex; flex-direction: column; flex: 1 1 0; min-height: 262px; }
+.bayhead { flex: none; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
+.bayhead h2 { margin: 0; font-size: 15px; }
+.baybody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.bay-scroll { flex: 1; min-height: 0; overflow: auto hidden; }
+
+/* The readout is the running commentary the bay would otherwise need a legend for: what
+   a jack is patched to under the pointer, and what is still needed to land a half-made
+   patch. It is one line and it never reflows, so the bay above it does not jump. */
+.bay-readout {
+  flex: none; font-size: 12px; color: var(--muted); padding: 5px 4px 0;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-table.matrix thead th { position: sticky; top: 0; z-index: 3; background: var(--panel); padding: 4px 3px; font-weight: 550; }
-table.matrix thead th.corner { left: 0; z-index: 4; }
-table.matrix tr.group th { background: var(--cell); font-weight: 650; text-align: left; padding: 3px 9px; }
-td.cell { width: 22px; height: 20px; cursor: pointer; }
-td.cell:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
-td.cell.on { background: var(--on); }
-td.blockgap { border-right: 2px solid var(--muted); }
+.bay-readout.live { color: var(--accent); font-weight: 550; }
+
+svg.bay { display: block; }
+svg.bay .rail { fill: var(--panel); stroke: var(--line); }
+svg.bay .band { fill: currentColor; opacity: .17; }
+svg.bay .band.inert { opacity: .07; }
+svg.bay .band-text {
+  fill: var(--ink); font-size: 10px; font-weight: 600; text-anchor: middle;
+  letter-spacing: .02em; pointer-events: none;
+}
+svg.bay .band.inert + .band-text { opacity: .45; }
+
+/* Jacks. The bezel is the panel hardware and the hole is the socket; a plug is drawn over
+   both when something is patched, so an empty jack reads as empty at a glance. */
+svg.bay .jack { cursor: pointer; outline: none; }
+svg.bay .jack .bezel { fill: var(--cell); stroke: var(--line); stroke-width: 1.2; }
+svg.bay .jack .hole { fill: var(--bg); stroke: none; opacity: .9; }
+svg.bay .jack .plug { fill: currentColor; stroke: var(--panel); stroke-width: 1.4; }
+svg.bay .jack .jack-num {
+  fill: var(--muted); font-size: 9.5px; text-anchor: middle; pointer-events: none;
+  font-family: var(--mono);
+}
+svg.bay .jack.inert { opacity: .42; }
+/* A jack carrying more than one cable: a source feeding several channels, or -- on the
+   destination row -- several channels the module is summing into one output. */
+svg.bay .shared-ring { stroke: var(--ink); stroke-width: 1.2; opacity: .45; }
+svg.bay .jack.hot .shared-ring { opacity: .9; }
+svg.bay .jack:hover .bezel, svg.bay .jack:focus-visible .bezel { stroke: var(--accent); stroke-width: 2; }
+svg.bay .jack.hot .jack-num { fill: var(--ink); font-weight: 700; }
+svg.bay .jack.armed .bezel {
+  stroke: var(--accent); stroke-width: 2.4; fill: color-mix(in srgb, var(--accent) 26%, var(--cell));
+}
+/* While a patch is half made the far row is the only place it can land, so it is the far
+   row that is lifted rather than the whole bay being dimmed around the armed jack. */
+svg.bay.arming .jack.target .bezel { stroke: var(--accent); stroke-dasharray: 2.6 2.2; }
+svg.bay.arming .jack:not(.target) { opacity: .38; }
+svg.bay.arming .jack.armed { opacity: 1; }
+
+/* Cables. Casing under core is what makes a stroke read as a cable rather than a line;
+   the hit path is invisible and exists so a 4px cable can be pointed at. */
+svg.bay .cable { pointer-events: stroke; }
+svg.bay .cable .hit { stroke: transparent; stroke-width: 11; fill: none; }
+svg.bay .cable .casing { stroke: #0b0d10; stroke-width: 5.6; fill: none; stroke-linecap: round; opacity: .55; }
+svg.bay .cable .core { stroke: currentColor; stroke-width: 3.2; fill: none; stroke-linecap: round; }
+svg.bay .cable.orphan .casing { stroke: var(--warn-line); stroke-width: 3; stroke-dasharray: 3 3; opacity: 1; }
+
+/* With thirty-two cables in a bay, legibility comes from what is dimmed rather than from
+   what is drawn. Pointing at anything drops the rest back far enough to follow one run. */
+svg.bay.focused .cable { opacity: .13; }
+svg.bay.focused .cable.hot { opacity: 1; }
+svg.bay.focused .cable.hot .core { stroke-width: 4; }
+svg.bay.focused .jack:not(.hot) { opacity: .45; }
+
+/* Signal families. One colour per family, used by the cable, the plug and the family bar,
+   so the same signal is the same colour wherever it is drawn. */
+svg.bay .fam-input  { color: #d98a2b; }
+svg.bay .fam-bus    { color: #9b6ade; }
+svg.bay .fam-usb    { color: #2f9fc4; }
+svg.bay .fam-mix    { color: #34a06a; }
+svg.bay .fam-spdif  { color: #d1544a; }
+svg.bay .fam-main   { color: #c8447f; }
+svg.bay .fam-es5    { color: #7a8798; }
+svg.bay .fam-output { color: #4a72d4; }
+svg.bay .fam-other  { color: var(--muted); }
+@media (prefers-color-scheme: dark) {
+  svg.bay .fam-input  { color: #f0a94e; }
+  svg.bay .fam-bus    { color: #b48cff; }
+  svg.bay .fam-usb    { color: #4fc3e8; }
+  svg.bay .fam-mix    { color: #4fd39a; }
+  svg.bay .fam-spdif  { color: #f2726a; }
+  svg.bay .fam-main   { color: #f272a9; }
+  svg.bay .fam-es5    { color: #9aa6b6; }
+  svg.bay .fam-output { color: #7d9dff; }
+  svg.bay .cable .casing { stroke: #05070a; opacity: .7; }
+}
 
 .links { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: 5px; }
 .links label { display: flex; align-items: center; gap: 7px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 6px 9px; font-size: 12.5px; cursor: pointer; }
