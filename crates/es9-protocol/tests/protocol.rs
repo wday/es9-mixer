@@ -82,7 +82,13 @@ fn upload_chunks_reassemble_into_the_same_dump() {
         assert_eq!(msg.cmd, 0x09);
         assert_eq!(msg.payload[0], i as u8, "chunk index");
         assert_eq!(msg.payload[1], 0);
-        words.extend(msg.payload[2..].chunks_exact(3).map(frame::join21));
+        words.extend(
+            msg.payload[2..]
+                .as_chunks::<3>()
+                .0
+                .iter()
+                .map(|w| frame::join21(w)),
+        );
     }
     assert_eq!(words, encode::config_words(&original));
 }

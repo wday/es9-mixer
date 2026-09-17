@@ -178,7 +178,8 @@ fn decode_message(payload: &[u8]) -> String {
 }
 
 fn words(payload: &[u8], skip: usize) -> Vec<u32> {
-    payload[skip..].chunks_exact(3).map(frame::join21).collect()
+    let (words, _) = payload[skip..].as_chunks::<3>();
+    words.iter().map(|w| frame::join21(w)).collect()
 }
 
 /// Decodes a `08H` configuration dump payload, which begins with two zero bytes.
@@ -261,11 +262,16 @@ pub fn decode_mix(payload: &[u8]) -> Result<MixDump, DecodeError> {
         });
     }
     let mut raw = [[0u16; 8]; 16];
-    for (i, chunk) in payload[..RAW_BYTES].chunks_exact(3).enumerate() {
+    for (i, chunk) in payload[..RAW_BYTES].as_chunks::<3>().0.iter().enumerate() {
         raw[i / 8][i % 8] = frame::join21(chunk) as u16;
     }
     let mut cells = Box::new([MacroCell::default(); 128]);
-    for (i, pair) in payload[RAW_BYTES..NEEDED].chunks_exact(2).enumerate() {
+    for (i, pair) in payload[RAW_BYTES..NEEDED]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .enumerate()
+    {
         cells[i] = MacroCell {
             value: pair[0],
             aux: pair[1],
@@ -285,7 +291,12 @@ fn decode_usage(payload: &[u8]) -> Result<Incoming, DecodeError> {
             got: payload.len(),
         });
     }
-    let u: Vec<u32> = payload[..8].chunks_exact(2).map(frame::join14).collect();
+    let u: Vec<u32> = payload[..8]
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|p| frame::join14(p))
+        .collect();
     Ok(Incoming::Usage(Usage {
         dsp0: (u[0], u[1]),
         dsp1: (u[2] != 0).then_some((u[2], u[3])),

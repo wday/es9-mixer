@@ -265,7 +265,9 @@ impl MockEs9 {
         }
         let start = i * encode::UPLOAD_WORDS_PER_CHUNK;
         for (n, chunk) in rest
-            .chunks_exact(3)
+            .as_chunks::<3>()
+            .0
+            .iter()
             .take(encode::UPLOAD_WORDS_PER_CHUNK)
             .enumerate()
         {
