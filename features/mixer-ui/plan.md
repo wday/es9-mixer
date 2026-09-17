@@ -84,18 +84,6 @@ source appears. The presentation model already funnels all labelling through
 `es9-device::view`, so this is one layer with an override table rather than a change
 spread across the UI.
 
-### A distributable build
-
-There is no installer and no prebuilt binary: installing means MSVC, LLVM and the ASIO
-SDK, which is most of the audience gone. The GPLv3 option the SDK is taken under is what
-makes distributing a binary legitimate, but the SDK itself is not redistributable, so no
-CI runner can build the shell — a release is a local Windows build uploaded by hand.
-`tauri.conf.json` has `bundle.active: false`; turning it on produces an MSI or NSIS
-installer instead of the bare `.exe` that `win-install.ps1` copies into place.
-
-Unsigned either way. Windows SmartScreen will warn on first run, and the README should say
-so plainly rather than let it look like a malware hit.
-
 ### Capture channel reservation for metering (M4)
 
 Metering a point that is not already routed to a USB capture channel means spending one.
@@ -126,19 +114,14 @@ Unverified on hardware from the most recent work, in the order worth checking.
    connected**, Save/Undo/Redo should disable, and any control you touch should raise the
    notice rather than moving. Plug it back in, press **Reconnect**, and it should find
    the module again — the sweep has to be able to reopen a port the dropped link held.
-4. **The header renders as intended.** It should read `Block 3: S/PDIF` followed by a
-   dimmed `out ← USB 5/6 · in not captured` (or `in → capture 15/16`, depending on the
-   routing). Covered by tests through the mock, and the Mixer 2 variant renders (it is in
-   `docs/img/routing.png`), but the S/PDIF wording has never been seen drawn. Confirm you
-   are on a freshly built shell, not a stale baked-in frontend.
-5. **Set capture 15/16 to MIX 1 / MIX 2** in the capture bay, then record those two
+4. **Set capture 15/16 to MIX 1 / MIX 2** in the capture bay, then record those two
    channels in the DAW. That is the stereo reference mix of exactly what leaves the main
    outs. Check it against the multitracks for level and alignment. Note that the mixer is
    the main output volume control, so riding those faders during a take is baked into the
    recording.
-6. **Loading a preset**, still never done against hardware. Save the current
+5. **Loading a preset**, still never done against hardware. Save the current
    configuration first. Note that the factory reset restores the factory routing, which
-   puts S/PDIF back on capture 15/16 and removes the reference capture from step 5.
+   puts S/PDIF back on capture 15/16 and removes the reference capture from step 4.
 
 ## 3. Hardware verification still outstanding
 

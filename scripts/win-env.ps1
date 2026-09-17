@@ -117,6 +117,20 @@ Then re-run, or pass -LibClang <path to the bin directory>, or set LIBCLANG_PATH
     $env:CPAL_ASIO_DIR    = $asio
     $env:LIBCLANG_PATH    = $clang
 
+    # Static CRT, set here rather than left to .cargo/config.toml alone.
+    #
+    # The config file gets rustc right, but cc-rs compiles the ASIO SDK's C++ with the
+    # dynamic CRT unless it sees crt-static in RUSTFLAGS itself. The result links, runs,
+    # and imports the Universal CRT alongside Rust's static one — two C runtimes, each
+    # with its own heap, in a binary where the C++ side allocates. That is a memory
+    # corruption bug waiting for the right allocation to cross the boundary, and nothing
+    # about the build output says it happened.
+    #
+    # RUSTFLAGS overrides the config files rather than adding to them. The value is
+    # deliberately identical, so a build through these scripts and a hand-run cargo from
+    # the repo root produce the same binary.
+    $env:RUSTFLAGS = '-C target-feature=+crt-static'
+
     Write-Host "target   $TargetDir"
     Write-Host "asio sdk $asio"
     Write-Host "libclang $clang"

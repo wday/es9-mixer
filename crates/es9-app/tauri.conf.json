@@ -24,10 +24,28 @@
     }
   },
   "bundle": {
-    "active": false,
-    "targets": "all",
+    "active": true,
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/icon.ico"
-    ]
+    ],
+    "publisher": "William Day",
+    "copyright": "Copyright (c) 2026 William Day. GPL-3.0-only.",
+    "shortDescription": "Control surface for the Expert Sleepers ES-9",
+    "longDescription": "An alternative control surface for the Expert Sleepers ES-9: matrix mixer, patchbay routing, and 16-channel metering over the module's MIDI SysEx protocol.",
+    "licenseFile": "../../LICENSE-GPL-3.0",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": [
+          "English"
+        ]
+      }
+    }
   }
 }

@@ -32,6 +32,37 @@ The shell runs on the rig: it connects over MIDI, shows the module's real config
 and meters sixteen channels at 48 kHz over ASIO. It is installed via
 `scripts/win-install.ps1` and launched from the Start Menu.
 
+### Distribution
+
+Two artefacts per release: a portable `.exe` and an NSIS installer, both from one build.
+
+The binary links the CRT **statically**, and this is load-bearing rather than tidiness.
+Linked dynamically it imports `VCRUNTIME140.dll` — the Visual C++ Redistributable, which
+is not part of Windows. Verified by parsing the PE import table: the shipped binary
+imports nothing but core Windows DLLs, no `VCRUNTIME` and no `api-ms-win-crt`.
+
+⚠️ **`cargo tauri build` does not honour the static-CRT setting; `cargo build` does.**
+Same tree, same environment, same target directory — the tauri-driven build produces a
+binary importing the Universal CRT dynamically while Rust's own CRT is static. Two C
+runtimes with two heaps in a binary whose C++ side allocates, and nothing in the build
+output says so. A release is therefore built in two steps: `cargo build --release` for the
+binary, then `cargo tauri bundle` to wrap the binary that already exists. Never
+`cargo tauri build`. The check that catches a regression is the import table, not the
+build log.
+
+The static setting lives in three places on purpose: `.cargo/config.toml` at the repo root
+for a hand-run cargo, `crates/es9-app/.cargo/config.toml` because cargo reads config
+relative to the working directory, and `RUSTFLAGS` in `scripts/win-env.ps1` so that
+`cc`-compiled ASIO sources agree with rustc. Identical values, so whichever wins produces
+the same binary.
+
+Both artefacts are unsigned, so SmartScreen warns on first run.
+
+The installer is per-user: no elevation, installs to `%LOCALAPPDATA%\Programs`, and its
+uninstaller removes both the files and its registry entry. Installing it silently to a
+throwaway directory and parsing the payload is how the shipped binary gets checked;
+`0.1.0` was verified that way, launched from there, and it connected to the module.
+
 Tabs: **Mixer**, **Routing**, **Analogue**, **Meters**, **CC Map** (carrying the stereo
 links, because a link rewrites the map it sits above), **Presets**, **Monitor**.
 

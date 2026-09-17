@@ -1,0 +1,13 @@
+# Static CRT on Windows, so a released binary is one file that runs anywhere.
+#
+# Linked dynamically, the shell imports VCRUNTIME140.dll and VCRUNTIME140_1.dll — the
+# Visual C++ Redistributable, which is not part of Windows and is not on every machine.
+# Statically linked it imports nothing but core Windows DLLs, at a cost of about 130 KB.
+# That is the difference between "download and run" and "download, then find out you also
+# need a Microsoft redistributable".
+#
+# Scoped to the MSVC target: Linux builds of the pure crates are untouched. Cargo reads
+# this file relative to the working directory, so it applies to builds run from the repo
+# root — which is how both PowerShell scripts invoke cargo, by manifest path.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

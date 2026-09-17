@@ -13,7 +13,7 @@ under a permissive licence.
 | `crates/es9-wasm` | MIT | Browser bridge over the mock. |
 | `web/` | MIT | Frontend. |
 | `docs/`, `features/` | MIT | Prose written for this project. |
-| **`crates/es9-audio`** | **GPL-3.0-only** | Links the Steinberg ASIO SDK under its GPLv3 option. |
+| **`crates/es9-audio`** | **GPL-3.0-only** | Links the Steinberg ASIO® SDK under its GPLv3 option. |
 | **`crates/es9-app`** | **GPL-3.0-only** | Links `es9-audio`. |
 
 Full texts: [`LICENSE-MIT`](LICENSE-MIT), [`LICENSE-GPL-3.0`](LICENSE-GPL-3.0).
@@ -44,4 +44,10 @@ Copyright (c) 2023 Expert Sleepers Ltd). The document is this project's own writ
 sources it was read from are not redistributed here. See
 [`docs/reference/README.md`](docs/reference/README.md).
 
-This project is not affiliated with or endorsed by Expert Sleepers Ltd.
+ASIO is a registered trademark of Steinberg Media Technologies GmbH. The ASIO SDK is
+dual-licensed, proprietary or GPLv3; this project takes the GPLv3 option, which is what
+makes both the source and a compiled binary distributable. The SDK is compiled in as
+object code and is not redistributed here in any form.
+
+This project is not affiliated with or endorsed by Expert Sleepers Ltd or Steinberg Media
+Technologies GmbH.

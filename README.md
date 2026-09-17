@@ -18,7 +18,7 @@ both visible without counting cells.
 
 ## Requirements
 
-- **Windows 10 or 11.** The ES-9's ASIO driver and WebView2 are both Windows-only; there
+- **Windows 10 or 11.** The ES-9's ASIO® driver and WebView2 are both Windows-only; there
   is no macOS or Linux build, and metering could not work without ASIO.
 - **ES-9 firmware 1.3.x.** Firmware 1.2 sends a different configuration dump and is
   detected and rejected rather than misparsed — update the module first.
@@ -28,7 +28,20 @@ both visible without counting cells.
   attached. The ES-9's USB port is a device port, so a USB controller cannot plug into the
   module directly.
 
-There is no installer or prebuilt binary yet; see [Building](#building-windows).
+## Download
+
+Both are on the [latest release](https://github.com/wday/es9-mixer/releases/latest), and
+both are the same build:
+
+- **Portable** — one `.exe`. Put it anywhere and run it. It links the C runtime
+  statically, so it needs no Visual C++ Redistributable; the only thing it writes is
+  `%APPDATA%\es9-mixer\presets`.
+- **Installer** — per-user, no elevation, Start Menu entry, clean uninstall. Worth
+  choosing over the portable build for one reason: if the machine has no WebView2
+  runtime, the installer fetches it and a bare `.exe` cannot.
+
+Neither is code-signed, so Windows SmartScreen will warn on first run: **More info** →
+**Run anyway**. Building from source is below if you would rather not take that on trust.
 
 ## Try it without an ES-9
 
@@ -205,4 +218,9 @@ The protocol was read from the ES-9 user manual's SysEx appendix and from Expert
 own MIT-licensed configuration tool at
 [expertsleepersltd/ES-9_tools](https://github.com/expertsleepersltd/ES-9_tools).
 
-This project is not affiliated with or endorsed by Expert Sleepers Ltd.
+ASIO is a registered trademark of Steinberg Media Technologies GmbH. Audio capture is
+built against the Steinberg ASIO SDK under its GPLv3 option; the SDK itself is not
+included here.
+
+This project is not affiliated with or endorsed by Expert Sleepers Ltd or Steinberg Media
+Technologies GmbH.

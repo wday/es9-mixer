@@ -352,3 +352,7 @@ button.armed { background: var(--warn-bg); border-color: var(--warn-line); color
   border: 1px solid var(--warn-line); border-radius: var(--radius);
   padding: 7px 9px; margin-top: 6px;
 }
+
+/* Attribution the ASIO trademark guidelines ask for wherever the mark is used. It is a
+   credit, not guidance, so it sits below everything the tab is actually for. */
+.hint.credit { font-size: 11px; opacity: 0.75; }

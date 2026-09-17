@@ -1,0 +1,9 @@
+# The same static-CRT setting as the repo root's .cargo/config.toml, repeated because
+# cargo reads config relative to the working directory and the shell gets built two ways:
+# `cargo build --manifest-path crates/es9-app/Cargo.toml` from the repo root, which finds
+# the root file, and `cargo tauri build`, which runs from this directory and does not.
+# Without this copy the bundled installer carries a binary that still wants the Visual C++
+# Redistributable, while the hand-built one does not — the worst kind of difference,
+# because both look identical until someone installs on a clean machine.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
