@@ -66,7 +66,9 @@ thing standing between the user and a silently wrong controller mapping.
 - **Audio:** `cpal` with the ASIO backend for 16-channel capture. Requires the Steinberg
   ASIO SDK at build time (`CPAL_ASIO_DIR`) plus LLVM/Clang. The SDK is not redistributable
   but building against it is permitted; taking its GPLv3 option makes `es9-audio` and
-  anything linking it GPL-3.0.
+  anything linking it GPL-3.0. That licence must not spread past the backend: the
+  ballistics live in `es9-meter`, which is MIT and links nothing, so a host that cannot
+  carry GPLv3 code still meters.
 - **Firmware target: 1.3.x only.** Firmware 1.2 uses a different config dump format; it is
   detected — by command byte, not the version field — and the user is told to update.
 - State persists to disk (labels, layout, snapshots).

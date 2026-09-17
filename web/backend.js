@@ -120,6 +120,7 @@ async function createTauriBackend() {
     kind: 'device',
     ports: call('ports'),
     connect: call('connect'),
+    reconnect: call('reconnect'),
     meters: call('meters'),
     snapshot: call('snapshot'),
     monitor: call('monitor'),

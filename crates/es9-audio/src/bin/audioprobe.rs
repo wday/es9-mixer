@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SizedSample};
 
-use es9_audio::meter::Meter;
+use es9_meter::Meter;
 
 fn main() {
     // `--hold <secs>` keeps the capture stream open for longer, so that another process

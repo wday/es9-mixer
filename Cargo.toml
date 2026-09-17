@@ -5,6 +5,7 @@ members = [
     "crates/es9-device",
     "crates/es9-midi",
     "crates/es9-audio",
+    "crates/es9-meter",
     "crates/es9-wasm",
 ]
 

@@ -1,10 +1,9 @@
-//! Audio capture and metering for the ES-9.
+//! Audio capture for the ES-9, over ASIO.
 //!
-//! Metering is host-side: the module has no audio-level telemetry in its SysEx protocol,
-//! only DSP load. The ES-9 can route any input, bus or mix output to a USB capture
-//! channel, so the host can meter any point that is worth spending a capture channel on.
+//! This crate is the backend edge only: opening the module's stream and keeping meters
+//! fed from it. The ballistics themselves are in `es9-meter`, which links nothing and is
+//! MIT — the split is what keeps a host that cannot carry GPLv3 code able to meter.
 
 #![forbid(unsafe_code)]
 
 pub mod capture;
-pub mod meter;

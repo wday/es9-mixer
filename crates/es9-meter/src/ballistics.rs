@@ -1,4 +1,6 @@
 //! Peak and RMS metering with ballistics.
+//!
+//! Pure arithmetic over blocks of samples: no backend, no allocation, no I/O.
 
 /// Per-channel meter state.
 ///

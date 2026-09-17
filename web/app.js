@@ -147,6 +147,52 @@ function showCcChanges(changes, what) {
 
 // ---------------------------------------------------------------- header
 
+/// Says what this window is attached to.
+///
+/// Load-bearing rather than decorative. Everything else on screen is a reading of the
+/// module, and all of it is drawn from the local model — which is perfectly happy to
+/// keep showing a configuration nobody is connected to. Without this, an unconnected
+/// shell is indistinguishable from a working one until you notice the Monitor tab is
+/// empty, which is far too late to learn that an hour of edits went nowhere.
+function renderConnection() {
+  const el = $('connection');
+  el.innerHTML = '';
+  const dot = '<span class="dot"></span>';
+
+  // The browser build drives the offline mock, and a mock that accepts every write looks
+  // exactly like a module that accepts every write. Say which one it is.
+  if (bridge.kind !== 'device') {
+    el.className = 'link mock';
+    el.innerHTML = `${dot}mock \u2014 no module`;
+    el.title = 'This is the offline prototype. Nothing here reaches an ES-9.';
+    return;
+  }
+  if (snap.connecting) {
+    el.className = 'link searching';
+    el.innerHTML = `${dot}looking for the module\u2026`;
+    el.title = 'Trying every MIDI port pair in turn; the ES-9 cannot be found by name.';
+    return;
+  }
+  if (snap.connected) {
+    el.className = 'link';
+    el.innerHTML = `${dot}connected`;
+    el.title = 'MIDI link open. Changes are sent to the module as you make them.';
+    return;
+  }
+  el.className = 'link offline';
+  el.innerHTML = `${dot}not connected`;
+  el.title =
+    'No MIDI link. Changes are refused rather than sent, so nothing here can reach the module.';
+  const again = document.createElement('button');
+  again.textContent = 'Reconnect';
+  again.onclick = async () => {
+    again.disabled = true;
+    await bridge.reconnect();
+    await refresh();
+  };
+  el.append(again);
+}
+
 function renderHeader() {
   const s = snap.status;
   const bits = [];
@@ -176,8 +222,12 @@ function renderHeader() {
     s.dirty ? ' &middot; unsaved' : ''
   }`;
 
-  $('undo').disabled = !snap.canUndo;
-  $('redo').disabled = !snap.canRedo;
+  // Offline, these are the three buttons most likely to be believed. Save especially:
+  // it is the one that sounds like it settled something.
+  const offline = bridge.kind === 'device' && !snap.connected;
+  $('undo').disabled = !snap.canUndo || offline;
+  $('redo').disabled = !snap.canRedo || offline;
+  $('save').disabled = offline;
   $('save').textContent = `Save to ${s.editing}`;
 }
 
@@ -776,7 +826,17 @@ function renderMonitor() {
 
 // ---------------------------------------------------------------- shell
 
+// Backend calls happen from event handlers that have nowhere to return an error to, so
+// a rejected write would otherwise vanish and leave the control sitting at a value the
+// module never accepted. The one-second poll redraws it from the model shortly after.
+addEventListener('unhandledrejection', (e) => {
+  const r = e.reason;
+  showNotice(String(r && r.message ? r.message : r));
+  e.preventDefault();
+});
+
 function render() {
+  renderConnection();
   renderHeader();
   if (tab === 'mixer') {
     renderMixList();

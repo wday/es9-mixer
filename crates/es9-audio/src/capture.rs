@@ -16,7 +16,8 @@ use std::sync::{Arc, Mutex};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{FromSample, Sample, SizedSample};
 
-use crate::meter::Meter;
+use es9_meter::Meter;
+pub use es9_meter::{Levels, MeterSnapshot};
 
 /// Why a capture stream could not be opened.
 #[derive(Debug, Clone)]
@@ -43,34 +44,6 @@ impl core::fmt::Display for CaptureError {
 }
 
 impl core::error::Error for CaptureError {}
-
-/// One channel's levels, in dBFS.
-#[derive(Debug, Clone, Copy, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Levels {
-    /// Current peak.
-    pub peak_db: f32,
-    /// Current RMS.
-    pub rms_db: f32,
-    /// Held peak.
-    pub hold_db: f32,
-    /// Whether the channel has clipped since the hold was last reset.
-    pub clipped: bool,
-    /// Mean sample value — the channel's DC offset, linear, signed.
-    pub dc: f32,
-}
-
-/// A snapshot of every metered channel, with the stream it came from.
-#[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MeterSnapshot {
-    /// Per-channel levels, in capture-channel order.
-    pub channels: Vec<Levels>,
-    /// Stream sample rate.
-    pub sample_rate: u32,
-    /// Host name, e.g. `"ASIO"`.
-    pub host: String,
-}
 
 /// A running capture stream.
 pub struct Capture {
@@ -136,16 +109,7 @@ impl Capture {
     /// Current levels for every channel.
     pub fn snapshot(&self) -> MeterSnapshot {
         let channels = match self.meters.lock() {
-            Ok(m) => m
-                .iter()
-                .map(|meter| Levels {
-                    peak_db: meter.peak_db(),
-                    rms_db: meter.rms_db(),
-                    hold_db: crate::meter::linear_to_db(meter.hold),
-                    clipped: meter.clipped,
-                    dc: meter.dc,
-                })
-                .collect(),
+            Ok(m) => m.iter().map(Levels::of).collect(),
             Err(_) => Vec::new(),
         };
         MeterSnapshot {

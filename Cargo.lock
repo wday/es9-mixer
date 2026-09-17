@@ -265,7 +265,7 @@ name = "es9-audio"
 version = "0.1.0"
 dependencies = [
  "cpal",
- "serde",
+ "es9-meter",
 ]
 
 [[package]]
@@ -273,6 +273,13 @@ name = "es9-device"
 version = "0.1.0"
 dependencies = [
  "es9-protocol",
+ "serde",
+]
+
+[[package]]
+name = "es9-meter"
+version = "0.1.0"
+dependencies = [
  "serde",
 ]
 

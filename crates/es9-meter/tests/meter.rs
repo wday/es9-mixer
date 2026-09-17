@@ -1,6 +1,6 @@
 //! Meter ballistics.
 
-use es9_audio::meter::{Meter, linear_to_db};
+use es9_meter::{Meter, linear_to_db};
 
 /// One block of a constant amplitude, at a rate and block size close to what the ES-9
 /// actually delivers over ASIO.

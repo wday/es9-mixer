@@ -2,14 +2,15 @@
 name = "es9-audio"
 version = "0.1.0"
 edition = "2024"
-description = "Audio capture and metering for the ES-9"
+description = "Audio capture for the ES-9"
 # On Windows this crate links the Steinberg ASIO SDK under its GPLv3 option, so this
-# crate and anything that links it are GPL-3.0. The pure crates stay MIT.
+# crate and anything that links it are GPL-3.0. Everything else stays MIT — including
+# `es9-meter`, which is why the ballistics live there and not here.
 license = "GPL-3.0-only"
 
 [dependencies]
+es9-meter = { path = "../es9-meter", features = ["serde"] }
 cpal = "0.15"
-serde = { version = "1", features = ["derive"] }
 
 # WASAPI shared mode can only run at the Windows endpoint's configured format — it
 # refuses any other rate — so it neither chooses nor honestly reports the module's real

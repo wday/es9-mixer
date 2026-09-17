@@ -51,31 +51,75 @@ struct Arrived {
 /// that is known; this is only the opening guess before the module has answered.
 const DEFAULT_RATE: u32 = 48_000;
 
+/// What every write reports when there is no MIDI link.
+///
+/// Worth a named constant: it is the difference between "the module refused this" and
+/// "this never left the building", and the shell must never blur the two.
+const NOT_CONNECTED: &str =
+    "not connected to the module \u{2014} this change was not sent anywhere";
+
 /// Everything the shell owns, behind one lock.
 struct App {
     session: Session,
     link: Option<MidiLink>,
-    /// Traffic log used before a link exists; once connected the link owns the real one.
+    /// Empty stand-in for the traffic log while there is no link to own the real one.
+    ///
+    /// Nothing writes to it: with no link there is no traffic. An empty Monitor tab is
+    /// therefore exactly the signature of a missing link, which is why the header says
+    /// so outright rather than leaving that to be inferred.
     monitor: Monitor,
     capture: Option<Capture>,
     /// Why audio is unavailable, if it is. Shown rather than swallowed.
     capture_error: Option<String>,
+    /// Set while a port sweep is running, so the header can say "searching" rather than
+    /// showing "not connected" for the seconds the sweep takes.
+    connecting: bool,
 }
 
 type Shared = Arc<Mutex<App>>;
 
 impl App {
     /// Sends messages and folds any immediate replies back into the model.
-    fn pump(&mut self, messages: Vec<Vec<u8>>) {
+    ///
+    /// Fails rather than discarding when there is no link. Dropping writes silently is
+    /// how a disconnected shell comes to look like a working one: the model moves, the
+    /// UI redraws, undo fills up, "save" reports success, and none of it reaches the
+    /// module. The only visible symptom is an empty Monitor tab, which is far too
+    /// subtle for what it means.
+    fn pump(&mut self, messages: Vec<Vec<u8>>) -> Result<(), String> {
         let Some(link) = self.link.as_mut() else {
-            return;
+            return Err(NOT_CONNECTED.to_string());
         };
+        // Every message is still attempted before reporting: a half-sent batch is a
+        // real state, and stopping at the first failure would leave more of it unsent.
+        let mut failure = None;
         for message in &messages {
             if let Err(e) = link.send(message) {
                 eprintln!("MIDI send failed: {e}");
+                if failure.is_none() {
+                    failure = Some(format!("the MIDI link rejected the write: {e}"));
+                }
             }
         }
         self.drain();
+        match failure {
+            Some(e) => Err(e),
+            None => Ok(()),
+        }
+    }
+
+    /// Refuses when there is no MIDI link.
+    ///
+    /// Called *before* the model is touched, not after. `pump` failing is too late: by
+    /// then `dispatch` has already moved the model and pushed an undo step for a change
+    /// the module never heard, and the shell is now showing a configuration that exists
+    /// nowhere but in itself.
+    fn require_link(&self) -> Result<(), String> {
+        if self.link.is_some() {
+            Ok(())
+        } else {
+            Err(NOT_CONNECTED.to_string())
+        }
     }
 
     /// Folds whatever the module has sent into the model, reporting what arrived.
@@ -206,6 +250,7 @@ struct Snapshot {
     can_undo: bool,
     can_redo: bool,
     connected: bool,
+    connecting: bool,
     audio_error: Option<String>,
 }
 
@@ -322,11 +367,36 @@ fn connect(state: State<'_, Shared>, input: usize, output: usize) -> Result<(), 
     Ok(())
 }
 
+/// Drops any existing link and sweeps the MIDI ports again for the module.
+///
+/// The sweep runs on its own thread and this returns immediately: it opens every
+/// input/output pair in turn and waits for a version reply on each, which takes seconds
+/// on a machine with several MIDI devices. Blocking a command that long freezes the
+/// webview. Progress is reported through the `connecting` flag in the snapshot, which
+/// the UI already polls once a second.
+#[tauri::command]
+fn reconnect(state: State<'_, Shared>) -> Result<(), String> {
+    {
+        let mut app = state.lock().map_err(|_| "state poisoned".to_string())?;
+        if app.connecting {
+            return Ok(());
+        }
+        app.connecting = true;
+        // Dropped before the sweep, not after: the old link holds the port open, and on
+        // Windows a second open of the same port is what fails.
+        app.link = None;
+    }
+    let shared = Arc::clone(state.inner());
+    std::thread::spawn(move || sweep(&shared));
+    Ok(())
+}
+
 #[tauri::command]
 fn snapshot(state: State<'_, Shared>) -> Result<Snapshot, String> {
     let mut app = state.lock().map_err(|_| "state poisoned".to_string())?;
     let _ = app.drain();
     let connected = app.link.is_some();
+    let connecting = app.connecting;
     let audio_error = app.capture_error.clone();
     let s = &app.session.state;
     Ok(Snapshot {
@@ -356,6 +426,7 @@ fn snapshot(state: State<'_, Shared>) -> Result<Snapshot, String> {
         can_undo: app.session.can_undo(),
         can_redo: app.session.can_redo(),
         connected,
+        connecting,
         audio_error,
     })
 }
@@ -396,6 +467,7 @@ fn clear_monitor(state: State<'_, Shared>) -> Result<(), String> {
 /// Applies an action, sends it, and reports any CC meanings it rewrote.
 fn dispatch(state: &State<'_, Shared>, action: Action) -> Result<Vec<CcChangeRow>, String> {
     let mut app = state.lock().map_err(|_| "state poisoned".to_string())?;
+    app.require_link()?;
     let applied = app.session.dispatch(action);
     let rows: Vec<CcChangeRow> = applied
         .cc_changes
@@ -406,7 +478,7 @@ fn dispatch(state: &State<'_, Shared>, action: Action) -> Result<Vec<CcChangeRow
             after: c.after.map(|_| describe(c.after)),
         })
         .collect();
-    app.pump(applied.messages);
+    app.pump(applied.messages)?;
     Ok(rows)
 }
 
@@ -564,10 +636,11 @@ fn preset_save(state: State<'_, Shared>, name: String) -> Result<(), String> {
 fn preset_load(state: State<'_, Shared>, name: String) -> Result<(), String> {
     let target = presets::load(&name)?;
     let mut app = state.lock().map_err(|_| "state poisoned".to_string())?;
+    app.require_link()?;
     let applied = app
         .session
         .dispatch(Action::LoadConfig(Box::new(target.clone())));
-    app.pump(applied.messages);
+    app.pump(applied.messages)?;
     app.verify_config(&target, "preset")
 }
 
@@ -584,13 +657,14 @@ fn preset_delete(name: String) -> Result<(), String> {
 #[tauri::command]
 fn reset_defaults(state: State<'_, Shared>, standalone: bool) -> Result<(), String> {
     let mut app = state.lock().map_err(|_| "state poisoned".to_string())?;
+    app.require_link()?;
     let previous = Box::new(app.session.state.config.clone());
     let target = if standalone {
         es9_protocol::encode::FlashSlot::Standalone
     } else {
         es9_protocol::encode::FlashSlot::Hosted
     };
-    app.pump(vec![encode::reset_to_defaults(target)]);
+    app.pump(vec![encode::reset_to_defaults(target)])?;
     std::thread::sleep(std::time::Duration::from_millis(300));
     if !app.request(encode::request_config(), |a| a.config) {
         return Err("the module did not report its configuration after the reset".into());
@@ -604,9 +678,10 @@ fn reset_defaults(state: State<'_, Shared>, standalone: bool) -> Result<(), Stri
 #[tauri::command]
 fn undo(state: State<'_, Shared>) -> Result<bool, String> {
     let mut app = state.lock().map_err(|_| "state poisoned".to_string())?;
+    app.require_link()?;
     match app.session.undo() {
         Some(applied) => {
-            app.pump(applied.messages);
+            app.pump(applied.messages)?;
             Ok(true)
         }
         None => Ok(false),
@@ -616,9 +691,10 @@ fn undo(state: State<'_, Shared>) -> Result<bool, String> {
 #[tauri::command]
 fn redo(state: State<'_, Shared>) -> Result<bool, String> {
     let mut app = state.lock().map_err(|_| "state poisoned".to_string())?;
+    app.require_link()?;
     match app.session.redo() {
         Some(applied) => {
-            app.pump(applied.messages);
+            app.pump(applied.messages)?;
             Ok(true)
         }
         None => Ok(false),
@@ -638,16 +714,18 @@ fn begin_edit(state: State<'_, Shared>, standalone: bool) -> Result<(), String> 
     } else {
         EditTarget::Hosted
     };
+    app.require_link()?;
     let messages = app.session.begin_edit(target);
-    app.pump(messages);
+    app.pump(messages)?;
     Ok(())
 }
 
 #[tauri::command]
 fn save(state: State<'_, Shared>) -> Result<(), String> {
     let mut app = state.lock().map_err(|_| "state poisoned".to_string())?;
+    app.require_link()?;
     let message = app.session.save();
-    app.pump(vec![message]);
+    app.pump(vec![message])?;
     Ok(())
 }
 
@@ -660,6 +738,7 @@ fn main() {
         monitor: Monitor::new(500),
         capture: None,
         capture_error: None,
+        connecting: true,
     }));
 
     tauri::Builder::default()
@@ -670,11 +749,7 @@ fn main() {
             // cannot be found by name on Windows, so this tries every output against
             // every input and keeps the pair that answers a version request.
             std::thread::spawn(move || {
-                match autoconnect(&shared) {
-                    Ok(Some((i, o))) => eprintln!("connected: input {i}, output {o}"),
-                    Ok(None) => eprintln!("no ES-9 answered on any MIDI port pair"),
-                    Err(e) => eprintln!("MIDI startup failed: {e}"),
-                }
+                sweep(&shared);
                 // Audio is independent of MIDI: meters are worth having even if the MIDI
                 // link never comes up, and vice versa.
                 match Capture::open(DEFAULT_RATE) {
@@ -701,6 +776,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             ports,
             connect,
+            reconnect,
             snapshot,
             meters,
             monitor,
@@ -727,6 +803,23 @@ fn main() {
         ])
         .run(tauri::generate_context!())
         .expect("failed to start the ES-9 mixer");
+}
+
+/// Runs one port sweep and clears the `connecting` flag however it ends.
+///
+/// Shared by startup and the header's Reconnect button so that both report the same way.
+/// The flag is cleared on every path — a sweep that ends without finding the module must
+/// still stop the header saying it is looking, and "still looking" is a claim the UI
+/// makes on this flag alone.
+fn sweep(shared: &Shared) {
+    match autoconnect(shared) {
+        Ok(Some((i, o))) => eprintln!("connected: input {i}, output {o}"),
+        Ok(None) => eprintln!("no ES-9 answered on any MIDI port pair"),
+        Err(e) => eprintln!("MIDI startup failed: {e}"),
+    }
+    if let Ok(mut app) = shared.lock() {
+        app.connecting = false;
+    }
 }
 
 /// Finds the ES-9 by asking, since it cannot be found by name.
