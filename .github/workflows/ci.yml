@@ -30,6 +30,12 @@ jobs:
           rustup target add wasm32-unknown-unknown
           rustup default stable
 
+      # es9-audio pulls cpal, and cpal's Linux backend needs the ALSA headers to build.
+      # Nothing here uses that backend — metering is ASIO on Windows — but the crate is a
+      # workspace member, so --workspace compiles it.
+      - name: Install ALSA headers
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+
       - uses: Swatinem/rust-cache@v2
 
       - run: cargo fmt --all --check
