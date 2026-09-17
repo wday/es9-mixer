@@ -144,6 +144,13 @@
           the protocol. Loading one is a single undoable step and is verified by reading
           the configuration back.
         </p>
+        <p class="hint warn">
+          <strong>Saving is tested; loading is not.</strong> No preset has yet been loaded
+          onto a real module &mdash; the transport it uses is verified and the step is
+          covered by tests against the mock, but the button itself is untried on hardware.
+          It replaces the <strong>entire</strong> configuration, routing included. Save the
+          current one first, so there is something to go back to.
+        </p>
       </div>
       <div class="presetsave">
         <input id="presetname" type="text" placeholder="Name for the current configuration" maxlength="64" />

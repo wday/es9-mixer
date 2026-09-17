@@ -2,7 +2,7 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "ES-9 Mixer",
   "version": "0.1.0",
-  "identifier": "uk.co.expert-sleepers.es9-mixer-alt",
+  "identifier": "io.github.wday.es9-mixer",
   "build": {
     "frontendDist": "../../web"
   },

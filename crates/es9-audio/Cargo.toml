@@ -3,6 +3,7 @@ name = "es9-audio"
 version = "0.1.0"
 edition = "2024"
 description = "Audio capture for the ES-9"
+repository = "https://github.com/wday/es9-mixer"
 # On Windows this crate links the Steinberg ASIO SDK under its GPLv3 option, so this
 # crate and anything that links it are GPL-3.0. Everything else stays MIT — including
 # `es9-meter`, which is why the ballistics live there and not here.

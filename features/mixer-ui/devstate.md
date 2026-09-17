@@ -14,12 +14,19 @@ if you need the archaeology; do not reconstruct it here.
 | `es9-protocol` | SysEx codec for the firmware 1.3 word-array dump. Pure: no I/O. | MIT |
 | `es9-device` | State, actions, undo, offline mock, send coalescing, presentation model. Pure. | MIT |
 | `es9-midi` | `midir` transport, SysEx reassembly, protocol monitor, `probe` binary. | MIT |
-| `es9-audio` | ASIO/WASAPI capture, meter ballistics, `audioprobe` binary. | **GPL-3.0** |
+| `es9-meter` | Meter ballistics and level readouts. Pure: no backend, no I/O. | MIT |
+| `es9-audio` | ASIO/WASAPI capture, `audioprobe` binary. | **GPL-3.0** |
 | `es9-app` | Tauri desktop shell. Its own workspace. | **GPL-3.0** |
 | `es9-wasm` | Browser bridge driving the mock. | MIT |
 | `web/` | One frontend; picks Tauri `invoke` or the WASM mock at load time. | — |
 
-112 tests, clippy and rustfmt clean, `./scripts/smoke.sh` passing.
+112 tests, clippy and rustfmt clean, `./scripts/smoke.sh` passing. GitHub Actions runs all
+of that on every push; it cannot build `es9-app`, which needs the Windows toolchain and an
+ASIO SDK no runner can fetch.
+
+The licence split is stated in `LICENSE.md` and in each crate's manifest. `docs/reference/`
+is no longer tracked — the ES-9 manual is Expert Sleepers' copyrighted documentation and is
+not redistributed; `docs/reference/README.md` says where each source came from.
 
 The shell runs on the rig: it connects over MIDI, shows the module's real configuration,
 and meters sixteen channels at 48 kHz over ASIO. It is installed via
@@ -27,6 +34,10 @@ and meters sixteen channels at 48 kHz over ASIO. It is installed via
 
 Tabs: **Mixer**, **Routing**, **Analogue**, **Meters**, **CC Map** (carrying the stereo
 links, because a link rewrites the map it sits above), **Presets**, **Monitor**.
+
+The header states what the window is attached to: **connected**, **looking for the
+module** during a port sweep, **not connected** with a Reconnect button that re-runs the
+sweep, or **mock — no module** in the browser build.
 
 ### The routing patchbay
 
@@ -124,7 +135,8 @@ of. Turning it on for audio on input 8 also turns it on for input 3.
 - The driver advertises 16 channels at **every** rate the module supports. 16 channels at
   48 kHz, ≈2.7 ms blocks, and it restores the module to 48 kHz rather than imposing a rate.
 - **The driver is multi-client in practice: metering runs while Ableton is open on the
-  same module.** The mixer is used this way on the rig.
+  same module.** The mixer is used this way on the rig. This does **not** extend to MIDI,
+  which the same DAW will hold exclusively — see *MIDI on Windows* below.
 - **WASAPI is rejected.** Shared mode can only run at the Windows endpoint's configured
   format, and opening a meter stream **re-clocked the module from 48 kHz to 32 kHz**,
   where it stayed until ASIO restored it. An explicit 48 kHz request was refused outright.
@@ -144,6 +156,12 @@ not change the list.
 **The module cannot be found by name.** The shell opens every plausible input/output pair
 and sends a version request; whichever answers is the module. Command-line tools take
 explicit `--in`/`--out` indices.
+
+**MIDI is not multi-client, and audio is.** With Ableton or Resolume holding the ES-9's
+MIDI port, the sweep cannot open it and the shell comes up with no link at all — while
+metering keeps working perfectly, because the ASIO driver *is* multi-client. That
+asymmetry is the trap: every reading on screen looks alive, and the DAW is the reason the
+one part that is dead is dead. Close whatever holds the port, then **Reconnect**.
 
 ## Invariants
 
@@ -194,6 +212,14 @@ single defect.
   sixteen rewritten CCs automatically, wherever it was triggered from.
 - **`es9-app` is deliberately not a workspace member.** Tauri pulls GTK and dbus, which
   WSL2 lacks and the app could never use. Build it by manifest path on Windows.
+- **A write with nowhere to go is refused, not discarded.** `App::require_link` runs
+  before the model is touched and `App::pump` fails when there is no link. Otherwise a
+  disconnected shell is indistinguishable from a working one: the model moves, the UI
+  redraws, undo fills with steps the module never heard, and "save" reports success. The
+  only other symptom is an empty Monitor tab — nothing writes to `App::monitor`, so
+  empty is exactly the signature of a missing link — which is far too subtle for what
+  it means. This is why the header states the link outright rather than leaving it to be
+  inferred from whether the readings look plausible.
 - **Destructive actions arm on the first click and fire on the second.** Preset load and
   factory reset replace the entire configuration.
 - **An output with no mix routed to it ignores its DC offset**, silently — the module
@@ -261,15 +287,26 @@ Stated as gaps rather than assumptions, so nothing downstream treats them as est
   configuration in which all 128 words read the pan centre. It stays written verbatim
   until a deliberately asymmetric pan configuration confirms it the same way the level
   half was confirmed.
-- **Loading a preset and the factory reset have not been pressed against hardware.** Both
-  replace the live configuration. Both are covered by tests through the mock, and the
-  `09H` upload transport they rely on is verified, but the buttons themselves are untried
-  on the module.
+- **Loading a preset has not been pressed against hardware.** It replaces the live
+  configuration. It is covered by tests through the mock and the `09H` upload transport it
+  relies on is verified, but the button itself is untried on the module. The Presets tab
+  and the README both say so. The **factory reset** has been used on the module several
+  times and behaves as expected — incidentally rather than as a deliberate test, so the
+  edges (undo after a reset, the routing replacement) are exercised only by the mock.
 - **Whether routing and option changes are echoed** the way macro writes are.
-- **The patchbay has never been seen in a browser.** Its geometry, hit testing and write
-  path are exercised headlessly against the mock — jack and cable counts, the family
-  bands, patching from either end, the no-op when a connection already exists — but that
-  harness is jsdom, which has no layout engine, and it lives outside the repo because the
-  project otherwise has no npm dependency. Nothing has confirmed how the bay *looks* at a
-  real window size, how a thirty-two-cable bay reads in motion, or that the hover dimming
-  does the work it is relied on to do.
+- **The connection UI has not been looked at.** The shell carrying it builds, runs on the
+  rig and writes reach the module, so the connected path is exercised. Nobody has yet
+  watched the badge in any of its four states, pressed Reconnect, or seen a write refused
+  with no link — including whether the sweep can reopen a port the previous link held.
+  Pulling the USB cable while the app is open exercises all of it at once.
+- **The patchbay has been rendered, but never driven.** It draws correctly in headless
+  Chromium at 1280×780 — both bays fit without horizontal scroll, the pitch and origin
+  agree between rows so a straight-through patch is vertical, and the family bands land
+  where they should; `docs/img/routing.png` is that render. What is still unconfirmed is
+  everything that needs a pointer: whether the hover dimming makes a single run followable
+  among thirty-two cables, how patching feels, and how any of it behaves in the Tauri
+  WebView rather than Chromium. Its geometry, hit testing and write path are exercised
+  headlessly against the mock — jack and cable counts, the family bands, patching from
+  either end, the no-op when a connection already exists — but that harness is jsdom,
+  which has no layout engine, and it lives outside the repo because the project otherwise
+  has no npm dependency.

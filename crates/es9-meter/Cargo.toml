@@ -3,6 +3,7 @@ name = "es9-meter"
 version = "0.1.0"
 edition = "2024"
 description = "Meter ballistics and level readouts for the ES-9"
+repository = "https://github.com/wday/es9-mixer"
 # Deliberately free of any audio backend. The ballistics are the same wherever the samples
 # come from, and keeping them here is what lets a host that cannot link the ASIO SDK —
 # iOS, where GPLv3 and App Store terms conflict — still draw the same meters.

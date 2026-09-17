@@ -344,3 +344,11 @@ svg.bay .fam-other  { color: var(--muted); }
 /* An armed button has to look different from an ordinary one, or the second click is a
    surprise rather than a confirmation. */
 button.armed { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); font-weight: 650; }
+
+/* An untested destructive path. Distinct from .notice, which is transient: this is a
+   standing property of the button below it and has to survive being read past. */
+.hint.warn {
+  color: var(--warn-ink); background: var(--warn-bg);
+  border: 1px solid var(--warn-line); border-radius: var(--radius);
+  padding: 7px 9px; margin-top: 6px;
+}

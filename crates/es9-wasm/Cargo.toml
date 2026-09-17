@@ -3,6 +3,7 @@ name = "es9-wasm"
 version = "0.1.0"
 edition = "2024"
 description = "Browser bridge: the ES-9 device model driving a mock module"
+repository = "https://github.com/wday/es9-mixer"
 license = "MIT"
 
 [lib]

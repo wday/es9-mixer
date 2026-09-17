@@ -3,17 +3,18 @@
 **Primary source: the official SysEx appendix in the ES-9 v1.3 user manual** (pages
 15–19), cross-checked against the config tool source.
 
-Sources, all archived under `docs/reference/`:
+Sources:
 
-| File | What it is |
+| Source | What it is |
 |---|---|
-| `es9_user_manual_1.3.txt` | Official manual, incl. the authoritative SysEx appendix |
-| `es9_config_tool_official_fw1.3.html` | **MIT-licensed** official tool from `expertsleepersltd/ES-9_tools`, for firmware 1.3.0 |
-| `es9_config_tool_1.3.html` | Web build of the same |
-| `es9_config_tool_1.2.html` | Older tool, firmware 1.2 — kept because the dump format differs |
+| ES-9 v1.3 user manual | Official manual, incl. the authoritative SysEx appendix |
+| `expertsleepersltd/ES-9_tools` | **MIT-licensed** official configuration tool, firmware 1.3.0 |
+| The same tool at firmware 1.2 | Kept for reference because the dump format differs |
 
 > **The official config tool is MIT licensed** (Copyright (c) 2023 Expert Sleepers Ltd).
-> It may be referenced and derived from directly.
+> It may be referenced and derived from directly. The manual is not redistributable;
+> neither is kept in this repository. `docs/reference/README.md` says where to get each,
+> and nothing in the build or the tests reads them.
 
 Status: **verified against a real ES-9 on firmware 1.3.1.** The manual is the
 specification; where hardware disagreed with it or with the reference tool, the measured

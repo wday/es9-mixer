@@ -3,6 +3,7 @@ name = "es9-device"
 version = "0.1.0"
 edition = "2024"
 description = "ES-9 device state, actions, undo, and an offline mock device"
+repository = "https://github.com/wday/es9-mixer"
 license = "MIT"
 
 [dependencies]

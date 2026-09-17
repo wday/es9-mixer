@@ -2,3 +2,10 @@
 /web/pkg
 /dumps
 /crates/es9-app/gen/schemas
+/crates/es9-app/target
+
+# Reference material read to write docs/es9-sysex-protocol.md. The manual is Expert
+# Sleepers' copyrighted documentation and is not redistributed; docs/reference/README.md
+# says where each file comes from.
+/docs/reference/*
+!/docs/reference/README.md

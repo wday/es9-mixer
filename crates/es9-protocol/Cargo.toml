@@ -3,6 +3,7 @@ name = "es9-protocol"
 version = "0.1.0"
 edition = "2024"
 description = "Codec for the Expert Sleepers ES-9 MIDI SysEx protocol (firmware 1.3)"
+repository = "https://github.com/wday/es9-mixer"
 license = "MIT"
 
 [dependencies]

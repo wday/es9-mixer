@@ -1,0 +1,63 @@
+# Everything here runs without an ES-9, and that is the point: the protocol codec, the
+# device model, the mock and the WASM bridge are all pure, so the only thing CI cannot
+# reach is the hardware itself. The desktop shell is not built here — it is a separate
+# workspace that needs the Windows toolchain and the Steinberg ASIO SDK, which is not
+# redistributable and so cannot be fetched by a runner.
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # Keep this in step with the wasm-bindgen dependency in crates/es9-wasm: the CLI and the
+  # crate must be the same version or the generated bindings are rejected at load.
+  WASM_BINDGEN_VERSION: "0.2.127"
+
+jobs:
+  test:
+    name: Format, lints, tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt,clippy
+          rustup target add wasm32-unknown-unknown
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: cargo fmt --all --check
+
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - run: cargo test --workspace
+
+  smoke:
+    name: End-to-end through the WASM bridge
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add wasm32-unknown-unknown
+          rustup default stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install wasm-bindgen-cli
+        run: |
+          cargo install wasm-bindgen-cli --version "$WASM_BINDGEN_VERSION" --locked
+
+      - run: ./scripts/smoke.sh

@@ -1,40 +1,44 @@
-# Builds the Windows-side binaries from the WSL2 working copy.
+# Builds the Windows-side binaries.
 #
-# The repo lives in WSL2 but the ES-9, its ASIO driver and the MSVC toolchain are all on
-# the Windows host, so Windows cargo compiles straight from the \\wsl$ path. Artefacts go
-# to a Windows-local target directory: sharing `target/` with the Linux build would make
-# the two fight over the same fingerprints, and writing objects over 9p is slow.
+# The ES-9, its ASIO driver and the MSVC toolchain are all on Windows. If the working copy
+# lives in WSL2, Windows cargo compiles straight from the \\wsl$ path — the repo is found
+# relative to this script either way. Artefacts go to a Windows-local target directory:
+# sharing `target/` with a Linux-side build makes the two fight over the same fingerprints,
+# and writing objects over 9p is slow.
 #
 #   powershell -File scripts\win-build.ps1              # build
+#   powershell -File scripts\win-build.ps1 -App -Run    # build the desktop shell and run it
 #   powershell -File scripts\win-build.ps1 -Probe       # build, then run the MIDI probe
 #   powershell -File scripts\win-build.ps1 -AudioProbe  # build, then run the audio probe
+#
+# Prerequisites are discovered, not assumed: see scripts\win-env.ps1. Pass -AsioDir,
+# -LibClang or -TargetDir to override, or set CPAL_ASIO_DIR / LIBCLANG_PATH /
+# CARGO_TARGET_DIR.
 
 param(
     [switch]$Probe,
     [switch]$AudioProbe,
     [switch]$App,
     [switch]$Run,
-    [string]$Distro = 'Ubuntu',
-    [string]$TargetDir = 'C:\Users\alien\es9-build',
-    [string]$AsioDir = 'C:\Users\alien\asiosdk',
-    [string]$LibClang = 'C:\Users\alien\scoop\apps\llvm\current\bin'
+    # Port indices for -Probe. The ES-9 is published through Windows MIDI Services under a
+    # generic jack name, so it cannot be found by name; run probe.exe with no arguments
+    # once to see the list.
+    [int]$In = -1,
+    [int]$Out = -1,
+    [int]$Rate = 48000,
+    [string]$Repo,
+    [string]$TargetDir,
+    [string]$AsioDir,
+    [string]$LibClang
 )
 
 $ErrorActionPreference = 'Stop'
-$repo = "\\wsl`$\$Distro\home\alien\dev\es9-mixer"
+. (Join-Path $PSScriptRoot 'win-env.ps1')
 
-if (-not (Test-Path $AsioDir)) {
-    Write-Error @"
-ASIO SDK not found at $AsioDir.
-Clone it first:  git clone --depth 1 https://github.com/audiosdk/asio.git $AsioDir
-It is the Steinberg SDK, dual-licensed proprietary / GPLv3; this project takes the GPLv3
-option, which is why crates/es9-audio is GPL-3.0-only.
-"@
-}
-
-$env:CARGO_TARGET_DIR = $TargetDir
-$env:CPAL_ASIO_DIR    = $AsioDir
-$env:LIBCLANG_PATH    = $LibClang
+# The script lives in <repo>\scripts, so the checkout is its parent — which works whether
+# it was launched from a Windows path or from \\wsl$.
+$repo = if ($Repo) { $Repo } else { Split-Path -Parent $PSScriptRoot }
+$TargetDir = Resolve-BuildEnv -TargetDir $TargetDir -AsioDir $AsioDir -LibClang $LibClang
 
 Push-Location $repo
 try {
@@ -53,8 +57,11 @@ try {
 }
 finally { Pop-Location }
 
-# The ES-9 is published through Windows MIDI Services under a generic jack name, so the
-# probe cannot find it by name and needs explicit port indices. Run it with no arguments
-# first to see the list.
-if ($Probe)      { & "$TargetDir\debug\probe.exe" --in 1 --out 2 }
-if ($AudioProbe) { & "$TargetDir\debug\audioprobe.exe" --rate 48000 }
+if ($Probe) {
+    $probeArgs = @()
+    if ($In -ge 0)  { $probeArgs += @('--in', $In) }
+    if ($Out -ge 0) { $probeArgs += @('--out', $Out) }
+    # With no indices the probe lists the ports and stops, which is the right first run.
+    & "$TargetDir\debug\probe.exe" @probeArgs
+}
+if ($AudioProbe) { & "$TargetDir\debug\audioprobe.exe" --rate $Rate }

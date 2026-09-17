@@ -5,29 +5,39 @@
 #
 #   powershell -File scripts\win-install.ps1
 #
+# `make win-install` from a WSL2 side runs exactly this, passing -Repo so the path comes
+# from the checkout being built. Run directly, the checkout is found relative to this
+# script. Prerequisites are discovered; see scripts\win-env.ps1.
+#
 # Windows deliberately blocks programmatic taskbar pinning, so the last step is yours:
 # find "ES-9 Mixer" in the Start menu, right-click it and choose "Pin to taskbar".
 
 param(
-    [string]$Distro = 'Ubuntu',
-    [string]$TargetDir = 'C:\Users\alien\es9-build',
-    [string]$AsioDir = 'C:\Users\alien\asiosdk',
-    [string]$LibClang = 'C:\Users\alien\scoop\apps\llvm\current\bin',
+    [string]$Repo,
+    [string]$TargetDir,
+    [string]$AsioDir,
+    [string]$LibClang,
     [switch]$SkipBuild
 )
 
 $ErrorActionPreference = 'Stop'
-$repo    = "\\wsl`$\$Distro\home\alien\dev\es9-mixer"
+. (Join-Path $PSScriptRoot 'win-env.ps1')
+
+$repo    = if ($Repo) { $Repo } else { Split-Path -Parent $PSScriptRoot }
 $appName = 'ES-9 Mixer'
 $installDir = Join-Path $env:LOCALAPPDATA 'Programs\ES-9 Mixer'
 
+# -SkipBuild installs a binary that is already there, so it must not demand a toolchain
+# it is not going to use.
+$TargetDir = if ($SkipBuild) { Resolve-TargetDir -TargetDir $TargetDir }
+             else { Resolve-BuildEnv -TargetDir $TargetDir -AsioDir $AsioDir -LibClang $LibClang }
+
 if (-not $SkipBuild) {
-    $env:CARGO_TARGET_DIR = $TargetDir
-    $env:CPAL_ASIO_DIR    = $AsioDir
-    $env:LIBCLANG_PATH    = $LibClang
     Push-Location $repo
     try {
-        Write-Host 'Building release binary...'
+        # Tauri bakes web/ into the binary, and crates/es9-app/build.rs watches that
+        # directory, so a frontend-only change still triggers a real recompile here.
+        Write-Host "Building release binary from $repo ..."
         cargo build --release --manifest-path crates\es9-app\Cargo.toml
         if ($LASTEXITCODE -ne 0) { throw 'release build failed' }
     }

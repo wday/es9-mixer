@@ -3,6 +3,7 @@ name = "es9-midi"
 version = "0.1.0"
 edition = "2024"
 description = "MIDI transport for the ES-9, with a protocol monitor"
+repository = "https://github.com/wday/es9-mixer"
 license = "MIT"
 
 [dependencies]
