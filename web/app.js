@@ -439,6 +439,7 @@ function renderRouting() {
   const sig = JSON.stringify([
     snap.routing.capture.map((c) => c.wire),
     snap.routing.outputs.map((c) => c.wire),
+    snap.links.map((l) => l.linked),
     snap.status.mixer2,
     host.clientWidth,
     host.clientHeight,
@@ -456,8 +457,18 @@ function renderRouting() {
     },
     idle:
       'Each capture channel takes exactly one source, so landing a cable on one moves ' +
-      'its plug. A source can feed as many channels as you like.',
+      'its plug. A source can feed as many channels as you like. Double-click a cable ' +
+      'to unpatch it; the bars above the sources link pairs as stereo.',
     inert: mixer2Off,
+    park: snap.routing.parkSource,
+    pairs: snap.links
+      .filter((l) => l.sources)
+      .map((l) => ({
+        wires: l.sources,
+        linked: l.linked,
+        label: l.label,
+        toggle: () => toggleLink(l, !l.linked),
+      })),
     apply: async (chan, wire) => {
       await bridge.setCapture(chan.block, chan.channel, wire);
       await refresh();
@@ -474,8 +485,9 @@ function renderRouting() {
     bottom: { title: 'Destinations', items: snap.destinations },
     idle:
       'Each output channel goes to exactly one destination. Several may land on the ' +
-      'same one, and the module sums them there.',
+      'same one, and the module sums them there. Double-click a cable to unpatch it.',
     inert: mixer2Off,
+    park: snap.routing.parkDestination,
     apply: async (chan, wire) => {
       await bridge.setOutput(chan.block, chan.channel, wire);
       await refresh();
@@ -541,14 +553,18 @@ function renderLinks() {
     const cb = document.createElement('input');
     cb.type = 'checkbox';
     cb.checked = l.linked;
-    cb.onchange = async () => {
-      const changes = await bridge.setLink(l.family, l.evenIndex, cb.checked);
-      await refresh();
-      showCcChanges(changes, `Linking ${l.label}`);
-    };
+    cb.onchange = () => toggleLink(l, cb.checked);
     label.append(cb, document.createTextNode(l.label));
     host.append(label);
   }
+}
+
+// One path for both places a link can be toggled -- this list and the patchbay -- so the
+// CC-map warning a link raises cannot be skipped by using the other control.
+async function toggleLink(l, on) {
+  const changes = await bridge.setLink(l.family, l.evenIndex, on);
+  await refresh();
+  showCcChanges(changes, `${on ? 'Linking' : 'Unlinking'} ${l.label}`);
 }
 
 // ---------------------------------------------------------------- input dc blocking

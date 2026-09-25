@@ -129,6 +129,14 @@ pub struct RouteChannel {
     pub wire: u8,
     /// Whether the wire value was recognised.
     pub known: bool,
+    /// Whether this connection is parked: routed through a bus that goes nowhere.
+    ///
+    /// The module has no "unrouted" value — every channel holds exactly one assignment —
+    /// so disconnecting means parking. A capture channel reading a bus nothing feeds is
+    /// silent, and an output landing on a bus nothing reads is a dead end. Either way no
+    /// signal passes, so the patchbay draws the channel as unpatched. Derived from the
+    /// routing alone, so it stays true when something later starts feeding that bus.
+    pub parked: bool,
 }
 
 /// The routing view: what each block captures and where it sends.
@@ -140,6 +148,72 @@ pub struct Routing {
     pub capture: Vec<RouteChannel>,
     /// Output assignments for all four blocks.
     pub outputs: Vec<RouteChannel>,
+    /// Where to point a capture channel to disconnect it: a bus nothing feeds, or `None`
+    /// when every bus has a writer. See [`RouteChannel::parked`].
+    pub park_source: Option<u8>,
+    /// Where to point an output to disconnect it: a bus nothing reads, preferring bus 16,
+    /// the factory configuration's dead end.
+    pub park_destination: Option<u8>,
+}
+
+/// Which buses are written to and read from by the blocks that are running.
+///
+/// Block 3 is the second mixer, and it only runs with the Mixer 2 option on; its routing
+/// bytes are real but move no signal otherwise, so they neither feed nor read a bus.
+struct BusUse {
+    written: [bool; 16],
+    read: [bool; 16],
+}
+
+impl BusUse {
+    fn of(state: &DeviceState) -> Self {
+        let active = |block: usize| block < 3 || state.config.options.mixer2;
+        let mut written = [false; 16];
+        let mut read = [false; 16];
+        for block in (0..4).filter(|&b| active(b)) {
+            for &wire in &state.config.outputs[block] {
+                if let Some(Destination::Bus(n @ 1..=16)) = Destination::from_wire(wire) {
+                    written[usize::from(n - 1)] = true;
+                }
+            }
+            for &wire in &state.config.capture[block] {
+                if let Some(Source::Bus(n @ 1..=16)) = Source::from_wire(wire) {
+                    read[usize::from(n - 1)] = true;
+                }
+            }
+        }
+        Self { written, read }
+    }
+
+    fn silent_source(&self, wire: u8) -> bool {
+        matches!(Source::from_wire(wire), Some(Source::Bus(n @ 1..=16)) if !self.written[usize::from(n - 1)])
+    }
+
+    fn dead_end(&self, wire: u8) -> bool {
+        matches!(Destination::from_wire(wire), Some(Destination::Bus(n @ 1..=16)) if !self.read[usize::from(n - 1)])
+    }
+}
+
+/// The bus a capture channel is parked on to disconnect it.
+///
+/// The highest bus nothing feeds, skipping buses in a stereo-linked pair: assigning one
+/// half of a linked pair drags the channel's neighbour along, and disconnecting one
+/// channel must not repatch another.
+fn park_source(state: &DeviceState, buses: &BusUse) -> Option<u8> {
+    (1..=16u8)
+        .rev()
+        .filter(|&n| !buses.written[usize::from(n - 1)])
+        .filter(|&n| !state.config.links.in_stereo_pair(Family::Bus, n - 1))
+        .find_map(|n| Source::Bus(n).to_wire())
+}
+
+/// The bus an output is parked on to disconnect it: bus 16, the factory dead end, unless
+/// something reads it, in which case the highest bus nothing reads.
+fn park_destination(buses: &BusUse) -> Option<u8> {
+    (1..=16u8)
+        .rev()
+        .find(|&n| !buses.read[usize::from(n - 1)])
+        .and_then(|n| Destination::Bus(n).to_wire())
 }
 
 /// One output's DC offset trim.
@@ -446,6 +520,7 @@ pub fn cc_rows(state: &DeviceState) -> Vec<CcRow> {
 
 /// Builds the routing patchbay view.
 pub fn routing(state: &DeviceState) -> Routing {
+    let buses = BusUse::of(state);
     let mut capture = Vec::with_capacity(32);
     let mut outputs = Vec::with_capacity(32);
     for block in 0..4u8 {
@@ -460,6 +535,7 @@ pub fn routing(state: &DeviceState) -> Routing {
                     .unwrap_or_else(|| format!("? {wire:#04X}")),
                 wire,
                 known: decoded.is_some(),
+                parked: buses.silent_source(wire),
             });
 
             let wire = state.config.outputs[usize::from(block)][usize::from(channel)];
@@ -472,10 +548,16 @@ pub fn routing(state: &DeviceState) -> Routing {
                     .unwrap_or_else(|| format!("? {wire:#04X}")),
                 wire,
                 known: decoded.is_some(),
+                parked: buses.dead_end(wire),
             });
         }
     }
-    Routing { capture, outputs }
+    Routing {
+        capture,
+        outputs,
+        park_source: park_source(state, &buses),
+        park_destination: park_destination(&buses),
+    }
 }
 
 /// Every source the patchbay can offer, in natural order.
@@ -507,8 +589,26 @@ pub fn available_destinations() -> Vec<(u8, String)> {
         .collect()
 }
 
+/// One stereo link a UI can offer.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LinkPair {
+    /// Signal family the pair belongs to.
+    pub family: Family,
+    /// Even channel index starting the pair.
+    pub even_index: u8,
+    /// Display name, e.g. `"USB 9/10"`.
+    pub label: String,
+    /// Whether the pair is linked.
+    pub linked: bool,
+    /// Wire bytes of the two sources the pair joins, where both are patchbay sources.
+    ///
+    /// `None` for the upper pairs of the S/PDIF family, which name Mixer 2 outputs that
+    /// the patchbay does not offer as sources.
+    pub sources: Option<(u8, u8)>,
+}
+
 /// The stereo link families and pairs a UI can offer, with their current state.
-pub fn links(state: &DeviceState) -> Vec<(Family, u8, String, bool)> {
+pub fn links(state: &DeviceState) -> Vec<LinkPair> {
     let families = [
         (Family::Input, "Input"),
         (Family::Bus, "Bus"),
@@ -522,12 +622,14 @@ pub fn links(state: &DeviceState) -> Vec<(Family, u8, String, bool)> {
         for pair in 0..family.pair_count() {
             let even = (pair * 2) as u8;
             let offset = if family == Family::UsbHigh { 8 } else { 0 };
-            out.push((
+            let wire = |i| Source::from_family_index(family, i).and_then(Source::to_wire);
+            out.push(LinkPair {
                 family,
-                even,
-                format!("{name} {}/{}", even + 1 + offset, even + 2 + offset),
-                state.config.links.is_linked(family, even),
-            ));
+                even_index: even,
+                label: format!("{name} {}/{}", even + 1 + offset, even + 2 + offset),
+                linked: state.config.links.is_linked(family, even),
+                sources: wire(even).zip(wire(even + 1)),
+            });
         }
     }
     out

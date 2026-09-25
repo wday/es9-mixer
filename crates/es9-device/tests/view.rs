@@ -181,13 +181,13 @@ fn the_patchbay_offers_inputs_in_natural_order() {
 fn link_list_labels_the_upper_usb_bank_correctly() {
     let s = wired();
     let links = view::links(&s.state);
-    assert!(links.iter().any(|(_, _, name, _)| name == "USB 1/2"));
+    assert!(links.iter().any(|l| l.label == "USB 1/2"));
     assert!(
-        links.iter().any(|(_, _, name, _)| name == "USB 9/10"),
+        links.iter().any(|l| l.label == "USB 9/10"),
         "the second USB bank must not be labelled 1/2 again"
     );
     assert_eq!(
-        links.iter().filter(|(f, ..)| *f == Family::Input).count(),
+        links.iter().filter(|l| l.family == Family::Input).count(),
         7,
         "14 inputs give 7 pairs"
     );
@@ -396,5 +396,159 @@ fn enabling_mixer_2_leaves_no_spdif_to_report() {
     assert_eq!(
         status.spdif, None,
         "block 3 is a mixer bank, so there is no S/PDIF processor to describe"
+    );
+}
+
+fn bus_src(n: u8) -> u8 {
+    Source::Bus(n).to_wire().expect("valid source")
+}
+
+fn bus_dst(n: u8) -> u8 {
+    Destination::Bus(n).to_wire().expect("valid destination")
+}
+
+#[test]
+fn an_output_on_a_bus_nothing_reads_is_parked() {
+    let mut s = wired();
+    s.state.config.outputs[2][7] = bus_dst(16);
+    let r = view::routing(&s.state);
+    let out = r
+        .outputs
+        .iter()
+        .find(|c| c.block == 2 && c.channel == 7)
+        .expect("present");
+    assert!(out.parked, "bus 16 with no reader is a dead end");
+    assert!(
+        !r.outputs[16].parked,
+        "a main-out assignment is a real connection"
+    );
+
+    // Once a capture channel reads bus 16, the same output is a live connection again.
+    s.state.config.capture[0][0] = bus_src(16);
+    let r = view::routing(&s.state);
+    let out = r
+        .outputs
+        .iter()
+        .find(|c| c.block == 2 && c.channel == 7)
+        .expect("present");
+    assert!(!out.parked);
+}
+
+#[test]
+fn a_capture_channel_on_a_bus_nothing_feeds_is_parked() {
+    let mut s = wired();
+    s.state.config.capture[0][3] = bus_src(12);
+    assert!(
+        view::routing(&s.state).capture[3].parked,
+        "nothing feeds bus 12, so it is silent"
+    );
+
+    s.state.config.outputs[2][6] = bus_dst(12);
+    assert!(
+        !view::routing(&s.state).capture[3].parked,
+        "fed now, so it carries signal"
+    );
+}
+
+#[test]
+fn outputs_park_on_bus_16_unless_something_reads_it() {
+    let mut s = wired();
+    assert_eq!(view::routing(&s.state).park_destination, Some(bus_dst(16)));
+
+    s.state.config.capture[0][0] = bus_src(16);
+    assert_eq!(view::routing(&s.state).park_destination, Some(bus_dst(15)));
+}
+
+#[test]
+fn capture_parks_on_the_highest_unfed_bus_outside_a_stereo_pair() {
+    let mut s = wired();
+    s.state.config.outputs[2][7] = bus_dst(16);
+    assert_eq!(
+        view::routing(&s.state).park_source,
+        Some(bus_src(15)),
+        "bus 16 is fed, so it would not be silent"
+    );
+
+    // Buses 15/16 are pair 7 of the bus family. Parking on a linked bus would drag the
+    // channel's neighbour along, so the pair is skipped entirely.
+    s.state.config.links.set(Family::Bus, 14, true);
+    assert_eq!(view::routing(&s.state).park_source, Some(bus_src(14)));
+}
+
+#[test]
+fn a_parked_capture_channel_changes_only_itself() {
+    let mut s = wired();
+    let park = view::routing(&s.state).park_source.expect("a free bus");
+    s.dispatch(Action::SetCapture {
+        block: 2,
+        channel: 3,
+        source: park,
+    });
+    let r = view::routing(&s.state);
+    let chan = |c: u8| {
+        r.capture
+            .iter()
+            .find(|x| x.block == 2 && x.channel == c)
+            .expect("present")
+    };
+    assert!(chan(3).parked);
+    assert_eq!(
+        chan(2).label,
+        "USB 3",
+        "the neighbouring channel is untouched"
+    );
+
+    s.undo();
+    assert_eq!(
+        view::routing(&s.state).capture[16 + 3].label,
+        "USB 4",
+        "undo restores it"
+    );
+}
+
+#[test]
+fn mixer_2_blocks_do_not_feed_buses_while_mixer_2_is_off() {
+    let mut s = wired();
+    s.state.config.outputs[3][0] = bus_dst(9);
+    s.state.config.capture[0][0] = bus_src(9);
+    s.state.config.options = Options {
+        mixer2: false,
+        midi_thru: false,
+    };
+    assert!(
+        view::routing(&s.state).capture[0].parked,
+        "block 3 is not running"
+    );
+
+    s.state.config.options = Options {
+        mixer2: true,
+        midi_thru: false,
+    };
+    assert!(!view::routing(&s.state).capture[0].parked);
+}
+
+#[test]
+fn link_pairs_name_the_source_jacks_they_join() {
+    let s = wired();
+    let links = view::links(&s.state);
+    let input_1_2 = links
+        .iter()
+        .find(|l| l.label == "Input 1/2")
+        .expect("present");
+    assert_eq!(
+        input_1_2.sources,
+        Some((
+            Source::Input(1).to_wire().expect("valid"),
+            Source::Input(2).to_wire().expect("valid")
+        ))
+    );
+    let mix2_upper: Vec<_> = links
+        .iter()
+        .filter(|l| l.family == Family::SpdifOrMix2 && l.even_index > 0)
+        .collect();
+    assert_eq!(mix2_upper.len(), 3);
+    assert!(
+        mix2_upper.iter().all(|l| l.sources.is_none()),
+        "no patchbay jacks exist for these, so they stay on the CC Map tab only"
     );
 }

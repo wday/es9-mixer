@@ -104,6 +104,22 @@ only the far row, which is the only place a patch can land.
 An unrecognised routing byte has no jack to land on, so it is drawn as a dashed stub off
 its channel rather than dropped — the value is real and round-trips.
 
+**Unpatching.** The module has no "unrouted" value, so a cable is removed by *parking* its
+channel on a bus that goes nowhere: an output on a bus no running block reads (bus 16, the
+factory dead end, unless something reads it), a capture channel on a bus nothing feeds
+(the highest such bus outside a stereo-linked pair, so the parking write never drags a
+neighbour along). `view::routing` derives `parked` from the routing itself, so a parked
+jack is drawn with a dashed bezel and no cable, and gets its cable back the moment that
+bus is fed or read. Double-click a cable or its channel jack, or point at it and press
+Delete. It is an ordinary routing write, so Undo reverses it. The factory configuration's
+outputs parked on bus 16 therefore read as unpatched, which is what they are.
+
+**Stereo links on the patchbay.** A strip above the source row carries one bar per
+linkable pair — dashed when unlinked, solid in the family colour when linked, with a
+bridge behind the two jacks. Clicking it goes through the same `toggleLink` as the CC Map
+list, so the CC-rewrite warning cannot be bypassed. The upper three Mixer 2 pairs have no
+source jacks and stay on the CC Map tab only.
+
 ## Measured against hardware
 
 Firmware **1.3.1**. Everything in this section was observed on a real module, not derived

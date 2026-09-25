@@ -233,6 +233,24 @@ svg.bay .cable .hit { stroke: transparent; stroke-width: 11; fill: none; }
 svg.bay .cable .casing { stroke: #0b0d10; stroke-width: 5.6; fill: none; stroke-linecap: round; opacity: .55; }
 svg.bay .cable .core { stroke: currentColor; stroke-width: 3.2; fill: none; stroke-linecap: round; }
 svg.bay .cable.orphan .casing { stroke: var(--warn-line); stroke-width: 3; stroke-dasharray: 3 3; opacity: 1; }
+svg.bay .cable { cursor: pointer; }
+
+/* A parked channel holds no plug: its bezel goes dashed so an unpatched jack reads as a
+   deliberate state rather than as a cable that failed to draw. */
+svg.bay .jack.parked .bezel { stroke-dasharray: 2.2 2; stroke: var(--muted); }
+svg.bay .jack.parked .hole { opacity: .5; }
+
+/* Stereo links. The strip above the source row holds one bar per linkable pair: solid in
+   the family colour when linked, a faint outline when not. A linked pair is also bridged
+   behind its jacks, so the pairing is visible where the cables leave. */
+svg.bay .link { cursor: pointer; outline: none; }
+svg.bay .link .link-hit { fill: transparent; }
+svg.bay .link .link-pill { fill: none; stroke: currentColor; stroke-width: 1.1; stroke-dasharray: 2.5 2; opacity: .35; }
+svg.bay .link:hover .link-pill, svg.bay .link:focus-visible .link-pill { opacity: .9; }
+svg.bay .link.on .link-pill { fill: currentColor; stroke-dasharray: none; opacity: .8; }
+svg.bay .link.on:hover .link-pill { opacity: 1; }
+svg.bay .link:focus-visible .link-pill { stroke: var(--accent); stroke-width: 1.8; }
+svg.bay .link-bridge { fill: currentColor; opacity: .55; }
 
 /* With thirty-two cables in a bay, legibility comes from what is dimmed rather than from
    what is drawn. Pointing at anything drops the rest back far enough to follow one run. */

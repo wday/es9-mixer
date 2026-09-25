@@ -267,6 +267,8 @@ struct LinkRow {
     even_index: u8,
     label: String,
     linked: bool,
+    /// Wire bytes of the two source jacks the pair joins on the patchbay, if it has them.
+    sources: Option<[u8; 2]>,
 }
 
 /// One logged message, shaped exactly as the WASM bridge sends it so the frontend's
@@ -408,11 +410,12 @@ fn snapshot(state: State<'_, Shared>) -> Result<Snapshot, String> {
         cc_rows: view::cc_rows(s),
         links: view::links(s)
             .into_iter()
-            .map(|(family, even_index, label, linked)| LinkRow {
-                family: family_index(family),
-                even_index,
-                label,
-                linked,
+            .map(|l| LinkRow {
+                family: family_index(l.family),
+                even_index: l.even_index,
+                label: l.label,
+                linked: l.linked,
+                sources: l.sources.map(|(a, b)| [a, b]),
             })
             .collect(),
         sources: view::available_sources()

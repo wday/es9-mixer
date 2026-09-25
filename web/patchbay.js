@@ -23,6 +23,7 @@ const BAND_H = 16; // the labelled bar naming each family of jacks
 const MIN_GAP = 104; // vertical run available to the cables
 const MAX_GAP = 210;
 const CHROME = 88; // everything in a bay that is not the cable gap
+const LINK_H = 13; // the strip of stereo-link toggles above a row that offers them
 
 // The jack half-way through a patch, as `${bayId}/${side}/${index}`, or null. Module
 // scope on purpose: `render()` throws this DOM away and rebuilds it once a second.
@@ -32,6 +33,24 @@ let hover = null;
 
 export function clearArmed() {
   armed = null;
+}
+
+// Delete and Backspace unpatch the channel under the pointer or keyboard focus. One
+// listener for the page rather than one per render: each bay registers how to unpatch its
+// own channels here, keyed by its id, and the key in `hover` or on the focused jack says
+// which bay is meant.
+const unpatchers = new Map();
+if (typeof window !== 'undefined') {
+  window.addEventListener('keydown', (e) => {
+    if (e.key !== 'Delete' && e.key !== 'Backspace') return;
+    if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
+    const focused = e.target.closest?.('.jack');
+    const k = focused ? `${focused.dataset.bay}/${focused.dataset.side}/${focused.dataset.i}` : hover;
+    if (!k) return;
+    const [id, side, i] = k.split('/');
+    const unpatch = unpatchers.get(id);
+    if (unpatch && unpatch(side, Number(i))) e.preventDefault();
+  });
 }
 
 // ---------------------------------------------------------------- label handling
@@ -113,7 +132,13 @@ function titled(node, text) {
 //                 a channel item carries { block, channel, wire, label, known }
 //                 a choice  item carries { wire, label }
 //   apply(channelItem, wire)   writes the connection; the caller refreshes
+//   park          wire that disconnects a channel (see below), or null if none is free
 //   inert(item)   optional, true for jacks whose block is currently disabled
+//   pairs         optional, on the top row: stereo pairs as
+//                 { wires: [left, right], linked, label, toggle() }
+//
+// A channel item may be `parked`. The module has no "unpatched" value, so disconnecting
+// points the channel at a bus that goes nowhere; such a channel is drawn with no cable.
 export function renderBay(host, spec) {
   host.innerHTML = '';
 
@@ -125,11 +150,18 @@ export function renderBay(host, spec) {
 
   const availW = host.clientWidth || 960;
   const availH = host.clientHeight || 320;
+  const linkH = spec.pairs?.length ? LINK_H : 0;
   const pitch = Math.min(MAX_PITCH, Math.max(MIN_PITCH, (availW - 2 * PAD) / n));
   const width = Math.round(2 * PAD + n * pitch);
-  const gap = Math.round(Math.min(MAX_GAP, Math.max(MIN_GAP, availH - CHROME - 30)));
+  // A bay wider than its host scrolls sideways, and the scrollbar comes out of the height;
+  // without allowing for it the bottom row's family bar is clipped.
+  const scrollbar = width > availW ? 18 : 0;
+  const gap = Math.round(
+    Math.min(MAX_GAP, Math.max(MIN_GAP, availH - CHROME - linkH - scrollbar - 30)),
+  );
 
-  const yTopNum = 2 + BAND_H + 12;
+  const yTopBand = 2 + linkH;
+  const yTopNum = yTopBand + BAND_H + 12;
   const yTop = yTopNum + 3 + JACK_R;
   const yBot = yTop + gap;
   const yBotNum = yBot + JACK_R + 12;
@@ -149,6 +181,7 @@ export function renderBay(host, spec) {
   const gPanel = svgEl('g', { class: 'bay-panel' }, svg);
   const gCables = svgEl('g', { class: 'bay-cables' }, svg);
   const gJacks = svgEl('g', { class: 'bay-jacks' }, svg);
+  const gLinks = svgEl('g', { class: 'bay-links' }, svg);
 
   // Panel: the rail each row of jacks is mounted on, and the family bars. A rail is only
   // as wide as its own row -- the source row is nearly twice the channel row, and a rail
@@ -173,7 +206,7 @@ export function renderBay(host, spec) {
   );
 
   for (const [side, y] of [
-    ['top', 2],
+    ['top', yTopBand],
     ['bottom', yBotNum + 4],
   ]) {
     for (const b of bands(rows[side])) {
@@ -203,6 +236,7 @@ export function renderBay(host, spec) {
           class: `jack fam-${it.fam}${it.inert ? ' inert' : ''}`,
           tabindex: 0,
           role: 'button',
+          'data-bay': spec.id,
           'data-side': side,
           'data-i': i,
         },
@@ -222,6 +256,15 @@ export function renderBay(host, spec) {
   const chanSide = spec.channelSide;
   const otherSide = chanSide === 'top' ? 'bottom' : 'top';
   rows[chanSide].forEach((chan, ci) => {
+    if (chan.parked) {
+      // Parked on a bus that goes nowhere: no signal passes, so no cable is drawn. The
+      // jack says where it is parked, because that bus is real and could be fed later.
+      const j = jackEls[chanSide][ci];
+      j.g.classList.add('parked');
+      j.g.querySelector('title').textContent =
+        `${j.item.tip} — unpatched (parked on ${chan.label}, which ${chanSide === 'bottom' ? 'nothing feeds' : 'nothing reads'})`;
+      return;
+    }
     const oi = rows[otherSide].findIndex((o) => o.wire === chan.wire);
     const from = chanSide === 'top' ? { side: 'top', i: ci } : { side: 'top', i: oi };
     const to = chanSide === 'top' ? { side: 'bottom', i: oi } : { side: 'bottom', i: ci };
@@ -234,7 +277,7 @@ export function renderBay(host, spec) {
       const j = jackEls[chanSide][ci];
       const dir = chanSide === 'top' ? 1 : -1;
       const d = `M ${j.x} ${j.y + dir * (JACK_R - 1)} l 0 ${dir * 26}`;
-      const g = svgEl('g', { class: 'cable orphan' }, gCables);
+      const g = svgEl('g', { class: 'cable orphan', 'data-chan': ci }, gCables);
       svgEl('path', { class: 'casing', d, fill: 'none' }, g);
       titled(g, `${chan.label} — unrecognised routing value, left untouched`);
       cables.push({ g, fam: 'other', top: chanSide === 'top' ? ci : -1, bottom: chanSide === 'top' ? -1 : ci });
@@ -242,7 +285,7 @@ export function renderBay(host, spec) {
     }
 
     // Colour follows the signal, which in both bays is whatever the top row holds.
-    const g = svgEl('g', { class: `cable fam-${topIt.fam}` }, gCables);
+    const g = svgEl('g', { class: `cable fam-${topIt.fam}`, 'data-chan': ci }, gCables);
     const d = cablePath(x(from.i), yTop + JACK_R - 1, x(to.i), yBot - JACK_R + 1);
     svgEl('path', { class: 'hit', d, fill: 'none' }, g);
     svgEl('path', { class: 'casing', d, fill: 'none' }, g);
@@ -276,6 +319,51 @@ export function renderBay(host, spec) {
       svgEl('circle', { class: 'shared-ring', cx: j.x, cy: j.y, r: JACK_R + 2.6, fill: 'none' }, j.g);
       j.g.querySelector('title').textContent =
         `${j.item.tip} — ${names.length} connections: ${names.join(', ')}`;
+    });
+  }
+
+  // Stereo links, as a strip of toggles above the pairs they join. A linked pair is also
+  // bridged at the jacks, so the pairing reads where the cables are, not only up here.
+  for (const pair of spec.pairs ?? []) {
+    const li = rows.top.findIndex((it) => it.wire === pair.wires[0]);
+    const ri = rows.top.findIndex((it) => it.wire === pair.wires[1]);
+    if (li < 0 || ri !== li + 1) continue;
+    const fam = rows.top[li].fam;
+    if (pair.linked) {
+      svgEl(
+        'rect',
+        { class: `link-bridge fam-${fam}`, x: x(li), y: yTop - 2.5, width: x(ri) - x(li), height: 5, rx: 2.5 },
+        gPanel,
+      );
+    }
+    const g = svgEl(
+      'g',
+      {
+        class: `link fam-${fam}${pair.linked ? ' on' : ''}`,
+        tabindex: 0,
+        role: 'switch',
+        'aria-checked': String(pair.linked),
+        'aria-label': `Stereo link ${pair.label}`,
+      },
+      gLinks,
+    );
+    const x0 = x(li) - pitch / 2 + 3;
+    const w = x(ri) - x(li) + pitch - 6;
+    svgEl('rect', { class: 'link-hit', x: x0, y: 0, width: w, height: linkH + 1 }, g);
+    svgEl('rect', { class: 'link-pill', x: x0 + 0.5, y: 2.5, width: w - 1, height: linkH - 5, rx: (linkH - 5) / 2 }, g);
+    titled(
+      g,
+      pair.linked
+        ? `${pair.label} — linked as a stereo pair. Click to unlink.`
+        : `${pair.label} — not linked. Click to link as a stereo pair.`,
+    );
+    const toggle = () => pair.toggle();
+    g.addEventListener('click', toggle);
+    g.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle();
+      }
     });
   }
 
@@ -328,9 +416,11 @@ export function renderBay(host, spec) {
         .map((c) => rows[hov.side === 'top' ? 'bottom' : 'top'][c[hov.side === 'top' ? 'bottom' : 'top']])
         .filter(Boolean)
         .map((o) => o.label);
+      const unpatchHint =
+        hov.side === chanSide && linked.length ? ' · double-click or press Delete to unpatch' : '';
       readout.className = 'bay-readout';
       readout.textContent = linked.length
-        ? `${it.label} — ${hov.side === 'top' ? '→' : '←'} ${linked.join(', ')}`
+        ? `${it.label} — ${hov.side === 'top' ? '→' : '←'} ${linked.join(', ')}${unpatchHint}`
         : `${it.label} — not patched`;
     } else {
       readout.className = 'bay-readout';
@@ -363,13 +453,44 @@ export function renderBay(host, spec) {
     await spec.apply(chan, choice.wire);
   }
 
+  // Disconnects a channel by parking it. Returns whether there was anything to do, so the
+  // key handler only swallows the keystroke when it acted.
+  function unpatch(side, i) {
+    // A hover can outlive the tab it happened on; a hidden bay never acts on a keystroke.
+    if (side !== chanSide || !svg.isConnected || !svg.getClientRects().length) return false;
+    const chan = rows[chanSide][i];
+    if (!chan || chan.parked) return false;
+    if (spec.park == null) {
+      readout.className = 'bay-readout live';
+      readout.textContent = `Cannot unpatch ${chan.label}: every bus is in use, so there is nowhere silent to park it.`;
+      return true;
+    }
+    armed = null;
+    spec.apply(chan, spec.park);
+    return true;
+  }
+  unpatchers.set(spec.id, unpatch);
+
+  // A cable under the pointer stands for its channel jack, which holds exactly one plug:
+  // hovering it highlights that one run, and Delete or a double-click unpatches it.
+  const hovered = (target) => {
+    const jack = target.closest?.('.jack');
+    if (jack) return { side: jack.dataset.side, i: Number(jack.dataset.i) };
+    const cable = target.closest?.('.cable');
+    if (cable) return { side: chanSide, i: Number(cable.dataset.chan) };
+    return null;
+  };
   svg.addEventListener('pointerover', (e) => {
-    const g = e.target.closest?.('.jack');
-    hover = g ? key(g.dataset.side, Number(g.dataset.i)) : hover;
-    if (g) paint();
+    const h = hovered(e.target);
+    hover = h ? key(h.side, h.i) : hover;
+    if (h) paint();
+  });
+  svg.addEventListener('dblclick', (e) => {
+    const h = hovered(e.target);
+    if (h) unpatch(h.side, h.i);
   });
   svg.addEventListener('pointerout', (e) => {
-    if (e.target.closest?.('.jack') && !svg.contains(e.relatedTarget)) {
+    if (hovered(e.target) && !svg.contains(e.relatedTarget)) {
       hover = null;
       paint();
     }
