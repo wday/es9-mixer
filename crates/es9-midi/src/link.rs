@@ -78,10 +78,16 @@ pub fn list_ports() -> Result<(Vec<PortInfo>, Vec<PortInfo>), MidiError> {
 /// Port names vary by platform and driver, so this matches loosely and the caller should
 /// still let the user override it.
 pub fn find_es9(ports: &[PortInfo]) -> Option<&PortInfo> {
-    ports.iter().find(|p| {
-        let n = p.name.to_ascii_lowercase().replace(['-', ' ', '_'], "");
-        n.contains("es9")
-    })
+    ports.iter().find(|p| looks_like_es9(&p.name))
+}
+
+/// Whether a port name looks like the ES-9's.
+///
+/// CoreMIDI names the ports after the module; Windows MIDI Services does not, so a miss
+/// here proves nothing.
+pub fn looks_like_es9(name: &str) -> bool {
+    let n = name.to_ascii_lowercase().replace(['-', ' ', '_'], "");
+    n.contains("es9")
 }
 
 /// An open connection to the module.

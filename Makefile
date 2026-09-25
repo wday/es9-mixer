@@ -3,6 +3,7 @@
 #
 #   make rundev       build the WASM bridge and serve web/ at http://localhost:8777
 #   make win-install  build the desktop shell on the Windows host and install it
+#   make mac-app      build ES-9 Mixer.app and a .dmg on macOS
 #
 # The hardware probes stay in scripts/win-build.ps1: they take arguments and are run by
 # hand, which is not what a make target is for.
@@ -12,7 +13,7 @@ POWERSHELL ?= powershell.exe
 
 .DEFAULT_GOAL := help
 
-.PHONY: help rundev serve web web-release test smoke check clean win-install
+.PHONY: help rundev serve web web-release test smoke check clean win-install mac-run mac-app
 
 help: ## List targets
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -49,6 +50,12 @@ win-install: ## Build the release shell on the Windows host and install it (WSL2
 	repo="$$(wslpath -w .)"; \
 	cd /mnt/c; \
 	$(POWERSHELL) -NoProfile -ExecutionPolicy Bypass -File "$$script" -Repo "$$repo"
+
+mac-run: ## Build and run the desktop shell from source (macOS)
+	cargo run --manifest-path crates/es9-app/Cargo.toml
+
+mac-app: ## Build ES-9 Mixer.app and a .dmg (macOS; needs `cargo install tauri-cli`)
+	cd crates/es9-app && cargo tauri build
 
 clean: ## Drop build output, including web/pkg
 	cargo clean

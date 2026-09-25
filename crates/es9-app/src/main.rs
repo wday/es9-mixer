@@ -827,30 +827,55 @@ fn sweep(shared: &Shared) {
 /// Windows publishes the module through Windows MIDI Services under a generic jack name
 /// ("2 - MIDI In"), so matching on "ES-9" finds nothing. Every plausible pair is opened
 /// and sent a version request; the one that answers with an ES-9 message is the module.
+///
+/// Where the platform does name the ports (CoreMIDI does), those are tried first, so the
+/// module usually answers and nothing else is sent a stray SysEx. A named pair also gets
+/// a second request: on CoreMIDI the first one after opening the port is lost while the
+/// endpoint settles, as the probe found (see `probe.rs`). Unnamed pairs get one, which
+/// keeps the Windows sweep as fast as it was.
 fn autoconnect(shared: &Shared) -> Result<Option<(usize, usize)>, String> {
-    let (inputs, outputs) = es9_midi::list_ports().map_err(|e| e.to_string())?;
+    let (mut inputs, mut outputs) = es9_midi::list_ports().map_err(|e| e.to_string())?;
+    inputs.sort_by_key(|p| !es9_midi::looks_like_es9(&p.name));
+    outputs.sort_by_key(|p| !es9_midi::looks_like_es9(&p.name));
 
     for out in &outputs {
         for inp in &inputs {
             let Ok(mut link) = MidiLink::open(inp.index, out.index) else {
                 continue;
             };
-            if link.send(&encode::request_version()).is_err() {
-                continue;
-            }
-            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(400);
-            while std::time::Instant::now() < deadline {
-                for message in link.poll() {
-                    if let Ok(Incoming::Message(_)) = decode(&message) {
-                        let mut app = shared.lock().map_err(|_| "state poisoned".to_string())?;
-                        app.link = Some(link);
-                        app.load_state();
-                        return Ok(Some((inp.index, out.index)));
-                    }
+            let named = es9_midi::looks_like_es9(&inp.name) && es9_midi::looks_like_es9(&out.name);
+            let attempts = if named { 2 } else { 1 };
+            for attempt in 0..attempts {
+                if attempt > 0 {
+                    std::thread::sleep(std::time::Duration::from_millis(300));
                 }
-                std::thread::sleep(std::time::Duration::from_millis(10));
+                if answers_version(&mut link) {
+                    let mut app = shared.lock().map_err(|_| "state poisoned".to_string())?;
+                    app.link = Some(link);
+                    app.load_state();
+                    return Ok(Some((inp.index, out.index)));
+                }
             }
         }
     }
     Ok(None)
+}
+
+/// Sends a version request and reports whether an ES-9 message came back in time.
+fn answers_version(link: &mut MidiLink) -> bool {
+    if link.send(&encode::request_version()).is_err() {
+        return false;
+    }
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(400);
+    while std::time::Instant::now() < deadline {
+        if link
+            .poll()
+            .iter()
+            .any(|message| matches!(decode(message), Ok(Incoming::Message(_))))
+        {
+            return true;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    false
 }

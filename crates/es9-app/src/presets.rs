@@ -32,14 +32,20 @@ pub struct PresetInfo {
 
 /// Where presets live.
 ///
-/// `%APPDATA%\es9-mixer\presets` on Windows, falling back to a directory beside the
-/// executable if the environment has no `APPDATA` at all.
+/// `%APPDATA%\es9-mixer\presets` on Windows and
+/// `~/Library/Application Support/es9-mixer/presets` on macOS, falling back to a directory
+/// beside the executable if the environment names no home at all.
 pub fn directory() -> PathBuf {
-    let base = std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
-        .unwrap_or_else(|| PathBuf::from("."));
-    base.join("es9-mixer").join("presets")
+    let base = if cfg!(target_os = "macos") {
+        std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support"))
+    } else {
+        std::env::var_os("APPDATA")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+    };
+    base.unwrap_or_else(|| PathBuf::from("."))
+        .join("es9-mixer")
+        .join("presets")
 }
 
 /// Rejects anything that is not a plain file name.

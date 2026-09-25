@@ -33,10 +33,12 @@ pub enum CaptureError {
 impl core::fmt::Display for CaptureError {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
-            Self::NoDevice => write!(
+            // The module is class-compliant on macOS; only Windows needs a driver.
+            Self::NoDevice if cfg!(windows) => write!(
                 f,
                 "no ES-9 audio device found; is the Expert Sleepers driver installed?"
             ),
+            Self::NoDevice => write!(f, "no ES-9 audio device found; is it connected?"),
             Self::NoConfig(e) => write!(f, "no usable input configuration: {e}"),
             Self::Stream(e) => write!(f, "could not start capture: {e}"),
         }
@@ -64,7 +66,10 @@ impl Drop for Capture {
 }
 
 impl Capture {
-    /// Opens the ES-9's capture stream, preferring ASIO and the given sample rate.
+    /// Opens the ES-9's capture stream, preferring ASIO.
+    ///
+    /// `preferred_rate` is used only on ASIO; other hosts open at the device's current
+    /// rate rather than change it.
     pub fn open(preferred_rate: u32) -> Result<Self, CaptureError> {
         let (tx, rx) = mpsc::channel();
         let stop = Arc::new(AtomicBool::new(false));
@@ -182,7 +187,19 @@ fn open_stream(preferred_rate: u32) -> Result<(cpal::Stream, StreamInfo), Captur
 
     let (host_id, device, max_channels) = best.ok_or(CaptureError::NoDevice)?;
 
-    let config = pick_config(&device, max_channels, preferred_rate)
+    // Only ASIO is asked for a rate. Every other host is opened at the rate the device is
+    // already running: WASAPI shared mode refuses anything else, and CoreAudio would not
+    // refuse — it sets the device's nominal rate to match, re-clocking the module under
+    // whatever else is using it.
+    let rate = if is_asio(host_id) {
+        preferred_rate
+    } else {
+        device
+            .default_input_config()
+            .map_or(preferred_rate, |c| c.sample_rate().0)
+    };
+
+    let config = pick_config(&device, max_channels, rate)
         .or_else(|| device.default_input_config().ok())
         .ok_or_else(|| CaptureError::NoConfig("device offered none".into()))?;
 

@@ -9,4 +9,4 @@ pub mod link;
 
 pub use assembler::SysexAssembler;
 pub use es9_device::monitor::{Direction, Entry, Monitor};
-pub use link::{MidiError, MidiLink, PortInfo, find_es9, list_ports};
+pub use link::{MidiError, MidiLink, PortInfo, find_es9, list_ports, looks_like_es9};

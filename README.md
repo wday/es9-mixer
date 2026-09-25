@@ -18,8 +18,11 @@ both visible without counting cells.
 
 ## Requirements
 
-- **Windows 10 or 11.** The ES-9's ASIO® driver and WebView2 are both Windows-only; there
-  is no macOS or Linux build, and metering could not work without ASIO.
+- **Windows 10 or 11, or macOS 13 or later.** On Windows, metering needs the ES-9's ASIO®
+  driver. On macOS the module is class-compliant and needs no driver: meters run over
+  CoreAudio at whatever rate the module is already running, and MIDI is multi-client, so
+  a DAW can stay open. There is no Linux build. The macOS build is built from source (see
+  [Building (macOS)](#building-macos)) and has not yet been tested against hardware.
 - **ES-9 firmware 1.3.x.** Firmware 1.2 sends a different configuration dump and is
   detected and rejected rather than misparsed — update the module first.
 - **The Expert Sleepers ASIO driver**, for metering. The mixer, routing and everything
@@ -154,6 +157,29 @@ host — Windows `cargo` builds straight from the `\\wsl$` path.
 > binary at compile time, so re-running an old executable shows the old UI. The build
 > script watches `web/`, so a rebuild is enough — but it has to be a rebuild.
 
+## Building (macOS)
+
+You need: the Xcode Command Line Tools, [Rust](https://rustup.rs), and the Tauri CLI.
+No ASIO SDK and no driver: `cpal` uses CoreAudio and `midir` uses CoreMIDI.
+
+```sh
+xcode-select --install          # if not already present
+cargo install tauri-cli --version "^2" --locked
+make mac-run                    # build and run from source
+make mac-app                    # build ES-9 Mixer.app and a .dmg
+```
+
+`mac-app` leaves the bundle in `crates/es9-app/target/release/bundle/macos/` and the disk
+image in `.../bundle/dmg/`. Neither is signed with a Developer ID, so the first launch of
+a copy downloaded from elsewhere needs right-click → **Open**; a bundle built on the same
+machine opens normally.
+
+Presets live in `~/Library/Application Support/es9-mixer/presets`.
+
+The macOS-only bundle settings (targets, `.icns` icon) are in
+`crates/es9-app/tauri.macos.conf.json`, which Tauri merges over `tauri.conf.json` on macOS
+only, so the Windows installer configuration is untouched.
+
 ## Layout
 
 | Path | What it is |
@@ -162,7 +188,7 @@ host — Windows `cargo` builds straight from the `\\wsl$` path.
 | `crates/es9-device` | Device state, actions, undo, offline mock, presentation model. Pure. |
 | `crates/es9-midi` | `midir` transport, SysEx reassembly, protocol monitor, `probe` binary. |
 | `crates/es9-meter` | Meter ballistics and level readouts. Pure: no backend, no I/O. |
-| `crates/es9-audio` | ASIO/WASAPI capture, `audioprobe` binary. GPL-3.0. |
+| `crates/es9-audio` | ASIO/WASAPI/CoreAudio capture, `audioprobe` binary. GPL-3.0. |
 | `crates/es9-app` | Tauri desktop shell. Its own workspace — Tauri cannot build on Linux. GPL-3.0. |
 | `crates/es9-wasm` | Browser bridge driving the mock. |
 | `web/` | One frontend; picks the Tauri backend or the WASM mock at load time. |

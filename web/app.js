@@ -617,6 +617,10 @@ function renderMeters() {
   const host = $('meters');
   if (!host) return;
   const status = $('meters-status');
+  // The ASIO explanation and trademark credit apply only when the meters actually run
+  // over ASIO; on CoreAudio they would describe a driver that is not there.
+  const credit = $('asio-credit');
+  if (credit) credit.hidden = !/^asio$/i.test(meters?.host ?? '');
 
   if (!meters) {
     host.innerHTML = '';
