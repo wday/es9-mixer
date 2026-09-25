@@ -113,8 +113,21 @@ button.primary { background: var(--accent); color: var(--accent-ink); border-col
   background: var(--warn-bg); border: 1px solid var(--warn-line);
   border-radius: var(--radius); color: var(--warn-ink); font-size: 13px;
 }
-.notice h4 { margin: 0 0 5px; font-size: 13px; }
-.notice ul { margin: 4px 0 0; padding-left: 18px; columns: 2; font-family: var(--mono); font-size: 11.5px; }
+.notice-head { display: flex; align-items: baseline; gap: 10px; }
+.notice h4 { margin: 0; font-size: 13px; flex: 1; }
+.notice-close {
+  flex: none; font: inherit; font-size: 16px; line-height: 1; padding: 0 4px;
+  background: none; border: none; color: var(--warn-ink); cursor: pointer; opacity: .75;
+}
+.notice-close:hover, .notice-close:focus-visible { opacity: 1; }
+.notice details { margin-top: 4px; }
+.notice summary { cursor: pointer; }
+/* A block 3 switch rewrites 64 CCs; the list scrolls inside the bar instead of pushing
+   the patchbay off the screen. */
+.notice ul {
+  margin: 6px 0 0; padding-left: 18px; columns: 2; font-family: var(--mono); font-size: 11.5px;
+  max-height: 30vh; overflow-y: auto;
+}
 
 /* `min-height: 0` is what actually lets a flex child shrink and scroll; without it the
    child is floored at its content height and the scrollbar lands on the body instead. */
@@ -189,7 +202,10 @@ details.raw .caveat { font-size: 10px; color: var(--warn-ink); background: var(-
 .block3 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .block3-note { margin: -2px 0 6px; }
 .baybody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.bay-scroll { flex: 1; min-height: 0; overflow: auto hidden; }
+/* Scrolls both ways: sideways when the rows are wider than the window, and down when a
+   notice or a short window leaves less height than the minimum cable gap, so no row of
+   jacks is ever clipped out of reach. */
+.bay-scroll { flex: 1; min-height: 0; overflow: auto; }
 
 /* The readout is the running commentary the bay would otherwise need a legend for: what
    a jack is patched to under the pointer, and what is still needed to land a half-made

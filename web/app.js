@@ -114,35 +114,55 @@ async function refresh() {
 
 // ---------------------------------------------------------------- notices
 
-/// Shows a plain message in the notice bar.
-function showNotice(text) {
+// The notice bar sits above the panels, so anything it holds pushes the work down. It
+// stays until dismissed -- a warning that vanished on its own could be missed -- but it
+// is one line tall, with any list folded away behind a disclosure.
+function openNotice(title) {
   const box = $('notice');
   box.hidden = false;
-  box.textContent = text;
+  box.innerHTML = '';
+  const head = document.createElement('div');
+  head.className = 'notice-head';
+  const h = document.createElement('h4');
+  h.textContent = title;
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'notice-close';
+  close.setAttribute('aria-label', 'Dismiss');
+  close.textContent = '×';
+  close.onclick = () => {
+    box.hidden = true;
+  };
+  head.append(h, close);
+  box.append(head);
+  return box;
+}
+
+/// Shows a plain message in the notice bar.
+function showNotice(text) {
+  openNotice(text);
 }
 
 function showCcChanges(changes, what) {
-  const box = $('notice');
   if (!changes || changes.length === 0) {
-    box.hidden = true;
+    $('notice').hidden = true;
     return;
   }
-  box.hidden = false;
-  box.innerHTML = '';
-  const h = document.createElement('h4');
-  h.textContent = `${what} rewrote ${changes.length} MIDI CC ${
-    changes.length === 1 ? 'assignment' : 'assignments'
-  }`;
-  const p = document.createElement('div');
-  p.textContent =
-    'CC numbers are fixed in hardware. Any controller mapped to these now does something different.';
+  const n = changes.length;
+  const box = openNotice(`${what} rewrote ${n} MIDI CC ${n === 1 ? 'assignment' : 'assignments'}`);
+  const details = document.createElement('details');
+  const summary = document.createElement('summary');
+  summary.textContent =
+    'CC numbers are fixed in hardware, so a controller mapped to these now does something ' +
+    `different. Show ${n === 1 ? 'the change' : `all ${n}`}`;
   const ul = document.createElement('ul');
   for (const c of changes) {
     const li = document.createElement('li');
     li.textContent = `CC ${c.cc}: ${c.before ?? 'unassigned'} → ${c.after ?? 'unassigned'}`;
     ul.append(li);
   }
-  box.append(h, p, ul);
+  details.append(summary, ul);
+  box.append(details);
 }
 
 // ---------------------------------------------------------------- header
