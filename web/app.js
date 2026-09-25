@@ -434,7 +434,33 @@ function invalidateBays() {
   baySignature = null;
 }
 
+// Block 3 is either the S/PDIF ports or a second mixer -- one options bit, and until it
+// is on, Mixer 2's inputs and MIX 9-16 are drawn greyed and carry nothing. The switch sits
+// on this tab because this is where those greyed jacks are, and where the question of why
+// they do nothing comes up.
+function renderBlock3() {
+  const on = snap.status.mixer2;
+  for (const b of document.querySelectorAll('[data-block3]')) {
+    const mine = b.dataset.block3 === (on ? 'mixer2' : 'spdif');
+    b.classList.toggle('on', mine);
+    b.setAttribute('aria-pressed', String(mine));
+  }
+  $('block3-note').textContent = on
+    ? 'Mixer 2 is running: its inputs and MIX 9–16 carry signal. The S/PDIF ports are off.'
+    : 'Block 3 is the S/PDIF ports, so Mixer 2 and MIX 9–16 are greyed and carry nothing. ' +
+      'Switch to Mixer 2 to use them; S/PDIF in and out then stop working.';
+}
+
+async function setBlock3(mixer2) {
+  if (mixer2 === snap.status.mixer2) return;
+  const changes = await bridge.setOptions(mixer2, snap.status.midiThru);
+  invalidateBays();
+  await refresh();
+  showCcChanges(changes, `Switching block 3 to ${mixer2 ? 'Mixer 2' : 'S/PDIF'}`);
+}
+
 function renderRouting() {
+  renderBlock3();
   const host = $('bay-capture');
   const sig = JSON.stringify([
     snap.routing.capture.map((c) => c.wire),
@@ -885,6 +911,10 @@ async function main() {
   $('tabs').onclick = (e) => {
     if (e.target.dataset.tab) selectTab(e.target.dataset.tab);
   };
+  for (const b of document.querySelectorAll('[data-block3]')) {
+    b.addEventListener('click', () => setBlock3(b.dataset.block3 === 'mixer2'));
+  }
+
   // Escape abandons a half-made patch. It is the only way out that does not require
   // finding the armed jack again, and a stray click elsewhere would otherwise land it.
   window.addEventListener('keydown', (e) => {

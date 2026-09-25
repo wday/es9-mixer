@@ -28,6 +28,9 @@ pub struct Status {
     pub dirty: bool,
     /// Whether the second mixer is enabled.
     pub mixer2: bool,
+    /// Whether MIDI out is acting as a thru. Reported so that changing the other option
+    /// in the same word can write this one back unchanged.
+    pub midi_thru: bool,
     /// The S/PDIF processor, present only when block 3 is acting as S/PDIF.
     ///
     /// `None` when [`Status::mixer2`] is set, because the block is a mixer bank instead.
@@ -274,6 +277,7 @@ pub fn status(state: &DeviceState) -> Status {
         editing: state.editing,
         dirty: state.dirty,
         mixer2: state.config.options.mixer2,
+        midi_thru: state.config.options.midi_thru,
         spdif: (!state.config.options.mixer2).then(|| spdif(state)),
         dsp_load: state
             .identity

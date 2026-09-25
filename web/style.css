@@ -178,6 +178,16 @@ details.raw .caveat { font-size: 10px; color: var(--warn-ink); background: var(-
 .bayblock { display: flex; flex-direction: column; flex: 1 1 0; min-height: 262px; }
 .bayhead { flex: none; display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 6px; }
 .bayhead h2 { margin: 0; font-size: 15px; }
+
+/* The block 3 switch: which of S/PDIF or Mixer 2 the options bit selects. */
+.block3 { margin-left: auto; display: inline-flex; align-items: center; gap: 0; font-size: 12.5px; }
+.block3 span { color: var(--muted); margin-right: 8px; }
+.block3 button { font: inherit; padding: 3px 10px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+.block3 button:first-of-type { border-radius: 5px 0 0 5px; }
+.block3 button:last-of-type { border-radius: 0 5px 5px 0; border-left: none; }
+.block3 button.on { background: var(--cell); color: var(--ink); border-color: var(--accent); font-weight: 550; }
+.block3 button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.block3-note { margin: -2px 0 6px; }
 .baybody { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .bay-scroll { flex: 1; min-height: 0; overflow: auto hidden; }
 
