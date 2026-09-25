@@ -602,33 +602,52 @@ pub struct LinkPair {
     pub linked: bool,
     /// Wire bytes of the two sources the pair joins, where both are patchbay sources.
     ///
-    /// `None` for the upper pairs of the S/PDIF family, which name Mixer 2 outputs that
-    /// the patchbay does not offer as sources.
+    /// `None` for the S/PDIF family whenever it links Mixer 2's mixes rather than the
+    /// S/PDIF input: the upper three pairs always, and the first one with Mixer 2 on.
     pub sources: Option<(u8, u8)>,
 }
 
 /// The stereo link families and pairs a UI can offer, with their current state.
 pub fn links(state: &DeviceState) -> Vec<LinkPair> {
+    let mixer2 = state.config.options.mixer2;
     let families = [
         (Family::Input, "Input"),
         (Family::Bus, "Bus"),
         (Family::UsbLow, "USB"),
         (Family::UsbHigh, "USB"),
         (Family::Mix, "MIX"),
-        (Family::SpdifOrMix2, "MIX 2"),
+        (Family::SpdifOrMix2, "MIX"),
     ];
     let mut out = Vec::new();
     for (family, name) in families {
         for pair in 0..family.pair_count() {
             let even = (pair * 2) as u8;
-            let offset = if family == Family::UsbHigh { 8 } else { 0 };
+            // The last family's bits mean what block 3 is. With Mixer 2 on they link its
+            // mixes, MIX 9-16; with it off, the first pair is the S/PDIF input and the
+            // other three name mixes that are not running.
+            let offset = match family {
+                Family::UsbHigh | Family::SpdifOrMix2 => 8,
+                _ => 0,
+            };
+            let spdif = family == Family::SpdifOrMix2 && !mixer2;
+            let label = if spdif && even == 0 {
+                "S/PDIF L/R".to_string()
+            } else {
+                format!("{name} {}/{}", even + 1 + offset, even + 2 + offset)
+            };
             let wire = |i| Source::from_family_index(family, i).and_then(Source::to_wire);
+            let sources = if family == Family::SpdifOrMix2 && mixer2 {
+                // The S/PDIF source jacks are not the ports these bits link any more.
+                None
+            } else {
+                wire(even).zip(wire(even + 1))
+            };
             out.push(LinkPair {
                 family,
                 even_index: even,
-                label: format!("{name} {}/{}", even + 1 + offset, even + 2 + offset),
+                label,
                 linked: state.config.links.is_linked(family, even),
-                sources: wire(even).zip(wire(even + 1)),
+                sources,
             });
         }
     }

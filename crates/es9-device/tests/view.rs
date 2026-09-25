@@ -552,3 +552,31 @@ fn link_pairs_name_the_source_jacks_they_join() {
         "no patchbay jacks exist for these, so they stay on the CC Map tab only"
     );
 }
+
+#[test]
+fn the_block_3_link_pair_follows_what_block_3_is() {
+    let mut s = wired();
+    s.state.config.options = Options {
+        mixer2: false,
+        midi_thru: false,
+    };
+    let first = |s: &Session| {
+        view::links(&s.state)
+            .into_iter()
+            .find(|l| l.family == Family::SpdifOrMix2 && l.even_index == 0)
+            .expect("present")
+    };
+    let spdif = first(&s);
+    assert_eq!(spdif.label, "S/PDIF L/R");
+    assert!(spdif.sources.is_some(), "drawn over the S/PDIF jacks");
+
+    // With Mixer 2 on, the same bit links MIX 9/10. Drawing it over the S/PDIF jacks
+    // would invite linking the phones mix while meaning to link an input.
+    s.state.config.options = Options {
+        mixer2: true,
+        midi_thru: false,
+    };
+    let mix = first(&s);
+    assert_eq!(mix.label, "MIX 9/10");
+    assert!(mix.sources.is_none());
+}

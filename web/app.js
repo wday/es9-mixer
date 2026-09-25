@@ -467,6 +467,10 @@ function renderRouting() {
         wires: l.sources,
         linked: l.linked,
         label: l.label,
+        // Unpatched capture channels sit on a bus; linking that bus's pair makes each of
+        // them read as half of a stereo source, which pairs mixer channels and moves CCs.
+        parked: snap.routing.capture.filter((c) => c.parked && l.sources.includes(c.wire))
+          .length,
         toggle: () => toggleLink(l, !l.linked),
       })),
     apply: async (chan, wire) => {

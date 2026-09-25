@@ -351,11 +351,15 @@ export function renderBay(host, spec) {
     const w = x(ri) - x(li) + pitch - 6;
     svgEl('rect', { class: 'link-hit', x: x0, y: 0, width: w, height: linkH + 1 }, g);
     svgEl('rect', { class: 'link-pill', x: x0 + 0.5, y: 2.5, width: w - 1, height: linkH - 5, rx: (linkH - 5) / 2 }, g);
+    const parkedNote = pair.parked
+      ? ` ${pair.parked} unpatched channel${pair.parked === 1 ? ' is' : 's are'} parked here, ` +
+        'and linking pairs them up as stereo.'
+      : '';
     titled(
       g,
       pair.linked
         ? `${pair.label} — linked as a stereo pair. Click to unlink.`
-        : `${pair.label} — not linked. Click to link as a stereo pair.`,
+        : `${pair.label} — not linked. Click to link as a stereo pair.${parkedNote}`,
     );
     const toggle = () => pair.toggle();
     g.addEventListener('click', toggle);
